@@ -23,6 +23,15 @@ Vielen Dank an Jochen aka Birdy aus dem alarmforum.de. Er hat mir seine Dateien 
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.0
+
+- Verbindung bleibt dauerhaft offen (Keep-Alive) statt bei jeder Abfrage neu aufzubauen; TLS-Handshake der Secvest-API entfällt dadurch bei den meisten Abfragen (~6-7s → <100ms)
+- Zonen, Fehler, Alarmzustand und die umfangreiche Wireless-/RSSI-Abfrage laufen jetzt unabhängig voneinander mit je eigenem, einstellbarem Intervall
+- Ausgänge werden optional (Ein/Aus-Schalter) im Zonen-Takt mitgefragt
+- Nur eine Abfrage gleichzeitig: läuft bereits eine, wird der nächste Tick eines anderen Intervalls übersprungen statt eingereiht (keine Überlastung)
+- Automatischer Reconnect nach 10 Sekunden (einstellbar) bei Verbindungsabbruch, bestehender Schutzpause-Mechanismus bleibt als Eskalationsstufe bei wiederholten Fehlern erhalten
+- Host, Benutzername, Passwort und Benutzer-Code lassen sich jetzt nachträglich über den Home-Assistant-Reconfigure-Dialog ändern (bisher nur bei der Ersteinrichtung möglich)
+
 ## Neu in Version 0.2.22
 
 - RSSI-/Funksignalwerte für Secvest-Funkmelder hinzugefügt
@@ -72,12 +81,14 @@ https://192.168.2.22:4433
 
 Bei neueren Secvest-Firmware-Versionen muss im Feld **Benutzername / Code** gegebenenfalls der Benutzer-Code eingetragen werden.
 
-Empfohlene Abfrageintervalle:
+Die vier Abfrage-Intervalle werden über die Integrations-Optionen eingestellt (Standardwerte):
 
-- Status-Intervall: `10` Sekunden
-- Melder-/Zonen-Intervall: `10` Sekunden
+- Zonen-Intervall: `3` Sekunden
+- Fehler-Intervall: `3` Sekunden
+- Alarmzustand-Intervall: `5` Sekunden
+- Umfangreiche Abfrage / RSSI: `5` Minuten
 
-Wenn die Secvest instabil oder träge reagiert, beide Werte auf `15` oder `30` Sekunden erhöhen.
+Dank dauerhaft offener Verbindung sind auch kurze Intervalle im Sekundenbereich unproblematisch (siehe "Neu in Version 0.3.0"). Reagiert die Secvest dennoch instabil oder träge, die Werte erhöhen. Host, Benutzername, Passwort und Benutzer-Code können nachträglich über das Drei-Punkte-Menü der Integration → **Neu konfigurieren** geändert werden.
 
 ## RSSI und Funkstatus
 
@@ -206,6 +217,15 @@ Many thanks to Jochen, aka Birdy, from alarmforum.de. He shared his files with m
 - German and English interface
 - Diagnostic export for troubleshooting
 
+## New in Version 0.3.0
+
+- Connection now stays open (keep-alive) instead of being rebuilt on every request; the Secvest API's TLS handshake is skipped for most polls (~6-7s → <100ms)
+- Zones, faults, alarm state and the extensive wireless/RSSI poll now run independently, each with its own configurable interval
+- Outputs can optionally (toggle) be fetched alongside zones
+- Only one request in flight at a time: if one is already running, the next tick of another interval is skipped rather than queued (avoids overload)
+- Automatic reconnect after 10 seconds (configurable) on connection loss; the existing cooldown mechanism remains as an escalation step for repeated failures
+- Host, username, password and user code can now be changed afterwards via the Home Assistant reconfigure dialog (previously only possible during initial setup)
+
 ## New in Version 0.2.22
 
 - Added RSSI/radio signal values for Secvest wireless detectors
@@ -255,12 +275,14 @@ https://192.168.2.22:4433
 
 With newer Secvest firmware versions, the **Username / Code** field may need to contain the user code.
 
-Recommended polling values:
+The four polling intervals are configured in the integration options (defaults):
 
-- Status interval: `10` seconds
-- Zone/sensor interval: `10` seconds
+- Zones interval: `3` seconds
+- Faults interval: `3` seconds
+- Alarm state interval: `5` seconds
+- Extensive poll / RSSI: `5` minutes
 
-If the Secvest becomes unstable or slow, increase both values to `15` or `30` seconds.
+Thanks to the persistent connection, short intervals in the single-digit-second range are not a problem (see "New in Version 0.3.0"). If the Secvest still reacts unstably or slowly, increase the values. Host, username, password and user code can be changed afterwards via the integration's three-dot menu → **Reconfigure**.
 
 ## RSSI and RF Status
 

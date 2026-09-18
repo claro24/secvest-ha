@@ -3,30 +3,46 @@
     "step": {
       "user": {
         "title": "Connect Secvest",
-        "description": "Host, for example https://192.168.2.22:4433. With newer Secvest firmware, you may need to enter the user code in the Username / Code field. Shorter intervals react faster but create more requests to the Secvest.",
+        "description": "Host, for example https://192.168.2.22:4433. With newer Secvest firmware, you may need to enter the user code in the Username / Code field. You can set the polling intervals afterwards in the integration options.",
         "data": {
           "host": "Host",
           "username": "Username / Code",
           "password": "Password",
           "user_code": "User PIN / arm code",
-          "verify_ssl": "Verify SSL (turn off for self-signed certificates)",
-          "scan_interval": "Status interval (seconds)",
-          "zones_interval": "Zone/sensor interval (seconds)"
+          "verify_ssl": "Verify SSL (turn off for self-signed certificates)"
+        }
+      },
+      "reconfigure": {
+        "title": "Update Secvest credentials",
+        "description": "Change the host and credentials used for the REST API. The integration reloads automatically after saving.",
+        "data": {
+          "host": "Host",
+          "username": "Username / Code",
+          "password": "Password",
+          "user_code": "User PIN / arm code",
+          "verify_ssl": "Verify SSL (turn off for self-signed certificates)"
         }
       }
     },
     "error": {
       "cannot_connect": "Connection failed"
+    },
+    "abort": {
+      "reconfigure_successful": "Credentials updated."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Secvest Options",
-        "description": "For faster sensor updates, set the intervals to e.g. 10 seconds. For RSSI, optionally enter a separate restricted web user. RSSI polling stays disabled without web credentials.",
+        "description": "Zones, faults, alarm state and the extensive wireless poll (RSSI/battery) each run independently on their own interval. For RSSI, optionally enter a separate restricted web user — RSSI polling stays disabled without web credentials.",
         "data": {
-          "scan_interval": "Status interval (seconds)",
-          "zones_interval": "Zone/sensor interval (seconds)",
+          "zones_interval": "Zones interval (seconds)",
+          "faults_interval": "Faults interval (seconds)",
+          "mode_interval": "Alarm state interval (seconds)",
+          "extensive_interval": "Extensive poll / RSSI (minutes)",
+          "fetch_outputs": "Fetch outputs alongside zones",
+          "reconnect_delay": "Reconnect delay after connection loss (seconds)",
           "web_username": "Web user / code (RSSI only)",
           "web_password": "Web password (RSSI only)",
           "retries": "Retries on errors",

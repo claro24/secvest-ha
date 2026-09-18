@@ -22,13 +22,21 @@ from .const import (
     CONF_WEB_USERNAME,
     CONF_WEB_PASSWORD,
     CONF_VERIFY_SSL,
-    CONF_SCAN_INTERVAL,
     CONF_ZONES_INTERVAL,
+    CONF_FAULTS_INTERVAL,
+    CONF_MODE_INTERVAL,
+    CONF_EXTENSIVE_INTERVAL,
+    CONF_FETCH_OUTPUTS,
+    CONF_RECONNECT_DELAY,
     CONF_RETRIES,
     CONF_BREAKER_THRESHOLD,
     CONF_BREAKER_COOLDOWN,
-    DEFAULT_SCAN_INTERVAL,
     DEFAULT_ZONES_INTERVAL,
+    DEFAULT_FAULTS_INTERVAL,
+    DEFAULT_MODE_INTERVAL,
+    DEFAULT_EXTENSIVE_INTERVAL,
+    DEFAULT_FETCH_OUTPUTS,
+    DEFAULT_RECONNECT_DELAY,
     DEFAULT_RETRIES,
     DEFAULT_BREAKER_THRESHOLD,
     DEFAULT_BREAKER_COOLDOWN,
@@ -48,8 +56,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # --- Read options (with sane defaults) ---
     options = entry.options
-    scan_interval = options.get(CONF_SCAN_INTERVAL, entry.data.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL))
-    zones_interval = options.get(CONF_ZONES_INTERVAL, entry.data.get(CONF_ZONES_INTERVAL, DEFAULT_ZONES_INTERVAL))
+    zones_interval = options.get(CONF_ZONES_INTERVAL, DEFAULT_ZONES_INTERVAL)
+    faults_interval = options.get(CONF_FAULTS_INTERVAL, DEFAULT_FAULTS_INTERVAL)
+    mode_interval = options.get(CONF_MODE_INTERVAL, DEFAULT_MODE_INTERVAL)
+    extensive_interval = options.get(CONF_EXTENSIVE_INTERVAL, DEFAULT_EXTENSIVE_INTERVAL)
+    fetch_outputs = options.get(CONF_FETCH_OUTPUTS, DEFAULT_FETCH_OUTPUTS)
+    reconnect_delay = options.get(CONF_RECONNECT_DELAY, DEFAULT_RECONNECT_DELAY)
     retries = options.get(CONF_RETRIES, DEFAULT_RETRIES)
     breaker_threshold = options.get(CONF_BREAKER_THRESHOLD, DEFAULT_BREAKER_THRESHOLD)
     breaker_cooldown = options.get(CONF_BREAKER_COOLDOWN, DEFAULT_BREAKER_COOLDOWN)
@@ -76,8 +88,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = SecvestCoordinator(
         hass=hass,
         api=api,
-        scan_interval_s=scan_interval,
         zones_interval_s=zones_interval,
+        faults_interval_s=faults_interval,
+        mode_interval_s=mode_interval,
+        extensive_interval_min=extensive_interval,
+        fetch_outputs=fetch_outputs,
+        reconnect_delay_s=reconnect_delay,
         breaker_threshold=breaker_threshold,
         breaker_cooldown=breaker_cooldown,
         zone_name_map=options.get("zone_name_map", {}),
@@ -210,7 +226,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # --- Forward platforms ---
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
-    hass.async_create_task(coordinator.async_request_refresh())
+    coordinator.async_start()
     return True
 
 
@@ -221,6 +237,10 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a Secvest config entry."""
+    store = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if store is not None:
+        await store["coordinator"].async_stop()
+
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:

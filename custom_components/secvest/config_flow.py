@@ -18,13 +18,22 @@ from .const import (
     CONF_WEB_USERNAME,
     CONF_WEB_PASSWORD,
     CONF_VERIFY_SSL,
-    CONF_SCAN_INTERVAL,
     CONF_ZONES_INTERVAL,
+    CONF_FAULTS_INTERVAL,
+    CONF_MODE_INTERVAL,
+    CONF_EXTENSIVE_INTERVAL,
+    CONF_FETCH_OUTPUTS,
+    CONF_RECONNECT_DELAY,
     CONF_RETRIES,
     CONF_BREAKER_THRESHOLD,
     CONF_BREAKER_COOLDOWN,
-    DEFAULT_SCAN_INTERVAL,
+    DEFAULT_VERIFY_SSL,
     DEFAULT_ZONES_INTERVAL,
+    DEFAULT_FAULTS_INTERVAL,
+    DEFAULT_MODE_INTERVAL,
+    DEFAULT_EXTENSIVE_INTERVAL,
+    DEFAULT_FETCH_OUTPUTS,
+    DEFAULT_RECONNECT_DELAY,
     DEFAULT_RETRIES,
     DEFAULT_BREAKER_THRESHOLD,
     DEFAULT_BREAKER_COOLDOWN,
@@ -33,26 +42,35 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _connection_schema(defaults: dict) -> vol.Schema:
+    return vol.Schema(
+        {
+            vol.Required(CONF_HOST, default=defaults.get(CONF_HOST)): str,  # z.B. https://192.168.2.22:4433
+            vol.Required(CONF_USERNAME, default=defaults.get(CONF_USERNAME)): str,
+            vol.Required(CONF_PASSWORD, default=defaults.get(CONF_PASSWORD)): str,
+            vol.Required(CONF_USER_CODE, default=defaults.get(CONF_USER_CODE)): str,
+            vol.Optional(CONF_VERIFY_SSL, default=defaults.get(CONF_VERIFY_SSL, DEFAULT_VERIFY_SSL)): bool,
+        }
+    )
+
+
 class SecvestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
     async def async_step_user(self, user_input=None):
-        errors: dict[str, str] = {}
+        return await self._async_step_connection(user_input, step_id="user", existing_entry=None)
 
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_HOST): str,  # z.B. https://192.168.2.22:4433
-                vol.Required(CONF_USERNAME): str,
-                vol.Required(CONF_PASSWORD): str,
-                vol.Required(CONF_USER_CODE): str,
-                vol.Optional(CONF_VERIFY_SSL, default=False): bool,
-                vol.Optional(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): int,
-                vol.Optional(CONF_ZONES_INTERVAL, default=DEFAULT_ZONES_INTERVAL): int,
-            }
-        )
+    async def async_step_reconfigure(self, user_input=None):
+        entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
+        return await self._async_step_connection(user_input, step_id="reconfigure", existing_entry=entry)
+
+    async def _async_step_connection(self, user_input, *, step_id: str, existing_entry: ConfigEntry | None):
+        errors: dict[str, str] = {}
+        defaults = dict(existing_entry.data) if existing_entry else {}
+        schema = _connection_schema(defaults if user_input is None else user_input)
 
         if user_input is None:
-            return self.async_show_form(step_id="user", data_schema=schema)
+            return self.async_show_form(step_id=step_id, data_schema=schema)
 
         # --- Robust connectivity test: TCP only (no HTTP/TLS) ---
         try:
@@ -72,7 +90,12 @@ class SecvestConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors["base"] = "cannot_connect"
 
         if errors:
-            return self.async_show_form(step_id="user", data_schema=schema, errors=errors)
+            return self.async_show_form(step_id=step_id, data_schema=schema, errors=errors)
+
+        if existing_entry is not None:
+            self.hass.config_entries.async_update_entry(existing_entry, data=user_input)
+            await self.hass.config_entries.async_reload(existing_entry.entry_id)
+            return self.async_abort(reason="reconfigure_successful")
 
         await self.async_set_unique_id(user_input[CONF_HOST])
         self._abort_if_unique_id_configured()
@@ -115,8 +138,25 @@ class SecvestOptionsFlowHandler(config_entries.OptionsFlow):
 
         schema = vol.Schema(
             {
-                vol.Optional(CONF_SCAN_INTERVAL, default=opts.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)): int,
-                vol.Optional(CONF_ZONES_INTERVAL, default=opts.get(CONF_ZONES_INTERVAL, DEFAULT_ZONES_INTERVAL)): int,
+                vol.Optional(
+                    CONF_ZONES_INTERVAL, default=opts.get(CONF_ZONES_INTERVAL, DEFAULT_ZONES_INTERVAL)
+                ): int,
+                vol.Optional(
+                    CONF_FAULTS_INTERVAL, default=opts.get(CONF_FAULTS_INTERVAL, DEFAULT_FAULTS_INTERVAL)
+                ): int,
+                vol.Optional(
+                    CONF_MODE_INTERVAL, default=opts.get(CONF_MODE_INTERVAL, DEFAULT_MODE_INTERVAL)
+                ): int,
+                vol.Optional(
+                    CONF_EXTENSIVE_INTERVAL,
+                    default=opts.get(CONF_EXTENSIVE_INTERVAL, DEFAULT_EXTENSIVE_INTERVAL),
+                ): int,
+                vol.Optional(
+                    CONF_FETCH_OUTPUTS, default=opts.get(CONF_FETCH_OUTPUTS, DEFAULT_FETCH_OUTPUTS)
+                ): bool,
+                vol.Optional(
+                    CONF_RECONNECT_DELAY, default=opts.get(CONF_RECONNECT_DELAY, DEFAULT_RECONNECT_DELAY)
+                ): int,
                 vol.Optional(CONF_WEB_USERNAME, default=opts.get(CONF_WEB_USERNAME, "")): str,
                 vol.Optional(CONF_WEB_PASSWORD, default=opts.get(CONF_WEB_PASSWORD, "")): str,
                 vol.Optional(CONF_RETRIES, default=opts.get(CONF_RETRIES, DEFAULT_RETRIES)): int,

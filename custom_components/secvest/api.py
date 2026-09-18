@@ -16,8 +16,6 @@ import aiohttp
 # Bei deiner Secvest besser großzügig sein:
 DEFAULT_TIMEOUT = aiohttp.ClientTimeout(total=20)
 
-# Retries für "wackelige" Embedded APIs:
-DEFAULT_RETRIES = 4
 DEFAULT_BACKOFF_BASE_S = 1.2   # 1.2s, 2.4s, 4.8s, ...
 DEFAULT_JITTER_S = 0.4         # +0..0.4s zufällig
 
@@ -77,8 +75,10 @@ class SecvestApi:
         return aiohttp.BasicAuth(self._auth.username, self._auth.password)
 
     def _common_headers(self) -> dict[str, str]:
-        # Keep-Alive kann Secvest gern "zumachen"/hängen lassen
-        return {"Accept": "application/json", "Connection": "close"}
+        # Verbindung bewusst offen halten (Keep-Alive): der TLS-Handshake
+        # dieser Embedded-API dauert ~6-7s, eine wiederverwendete Verbindung
+        # dagegen <100ms. Reconnect nach Abbruch uebernimmt der Coordinator.
+        return {"Accept": "application/json"}
 
     async def _read_json(self, resp: aiohttp.ClientResponse) -> Any:
         # Robust: immer Text lesen und selbst JSON parsen
@@ -526,7 +526,6 @@ class SecvestApi:
             reused_headers = {
                 "Accept": "*/*",
                 "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "Connection": "close",
                 "Origin": origin,
                 "Referer": f"{self._host}/sec_main.cgi",
                 "X-Requested-With": "XMLHttpRequest",
@@ -560,7 +559,6 @@ class SecvestApi:
         xhr_headers = {
             "Accept": "*/*",
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "Connection": "close",
             "Origin": origin,
             "Referer": f"{self._host}/sec_main.cgi",
             "X-Requested-With": "XMLHttpRequest",
@@ -580,7 +578,6 @@ class SecvestApi:
             headers={
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 "Content-Type": "application/x-www-form-urlencoded",
-                "Connection": "close",
                 "Origin": origin,
                 "Referer": f"{self._host}/sec_login.cgi",
                 "Cookie": cookie_header,
@@ -611,7 +608,6 @@ class SecvestApi:
             headers={
                 "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
                 "Content-Type": "application/x-www-form-urlencoded",
-                "Connection": "close",
                 "Origin": origin,
                 "Referer": f"{self._host}/sec_login.cgi",
                 "Cookie": cookie_header,
@@ -627,7 +623,6 @@ class SecvestApi:
 
         dynamic_headers = {
             "Accept": "*/*",
-            "Connection": "close",
             "Referer": f"{self._host}/sec_main.cgi",
             "Cookie": cookie_header,
         }
@@ -737,7 +732,7 @@ class SecvestApi:
                 f"/faults/{fault_id}",
             ),
             json_payload={"ack": True, "acknowledge": True},
-            headers={"Content-Type": "application/json", "Connection": "close"},
+            headers={"Content-Type": "application/json"},
             expect_json=False,
         )
 
@@ -750,6 +745,6 @@ class SecvestApi:
                 "/system/partitions-1",
             ),
             json_payload={"state": new_state, "code": self._auth.user_code},
-            headers={"Content-Type": "application/json", "Connection": "close"},
+            headers={"Content-Type": "application/json"},
             expect_json=False,
         )

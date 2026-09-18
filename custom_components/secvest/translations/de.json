@@ -3,30 +3,46 @@
     "step": {
       "user": {
         "title": "Secvest verbinden",
-        "description": "Host z.B. https://192.168.2.22:4433. Bei neuer Secvest-Firmware muss im Feld Benutzername / Code ggf. der Benutzer-Code eingetragen werden. Kürzere Intervalle reagieren schneller, erzeugen aber mehr Abfragen an die Secvest.",
+        "description": "Host z.B. https://192.168.2.22:4433. Bei neuer Secvest-Firmware muss im Feld Benutzername / Code ggf. der Benutzer-Code eingetragen werden. Die Abfrage-Intervalle stellst du danach über die Integrations-Optionen ein.",
         "data": {
           "host": "Host",
           "username": "Benutzername / Code",
           "password": "Passwort",
           "user_code": "Benutzer-PIN / Schaltcode",
-          "verify_ssl": "SSL prüfen (bei selbstsigniertem Zertifikat AUS)",
-          "scan_interval": "Status-Intervall (Sek.)",
-          "zones_interval": "Melder-/Zonen-Intervall (Sek.)"
+          "verify_ssl": "SSL prüfen (bei selbstsigniertem Zertifikat AUS)"
+        }
+      },
+      "reconfigure": {
+        "title": "Secvest Zugangsdaten aktualisieren",
+        "description": "Host und Zugangsdaten für den REST-API-Zugriff ändern. Die Integration wird nach dem Speichern automatisch neu geladen.",
+        "data": {
+          "host": "Host",
+          "username": "Benutzername / Code",
+          "password": "Passwort",
+          "user_code": "Benutzer-PIN / Schaltcode",
+          "verify_ssl": "SSL prüfen (bei selbstsigniertem Zertifikat AUS)"
         }
       }
     },
     "error": {
       "cannot_connect": "Verbindung fehlgeschlagen"
+    },
+    "abort": {
+      "reconfigure_successful": "Zugangsdaten aktualisiert."
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "Secvest Optionen",
-        "description": "Für schnellere Melderreaktion die Intervalle z.B. auf 10 Sekunden setzen. Für RSSI optional einen separaten, eingeschränkten Web-Benutzer eintragen. Ohne Web-Zugangsdaten bleibt die RSSI-Abfrage deaktiviert.",
+        "description": "Zonen, Fehler, Alarmzustand und die umfangreiche Wireless-Abfrage (RSSI/Batterie) laufen unabhängig voneinander, je mit eigenem Intervall. Für RSSI zusätzlich einen separaten, eingeschränkten Web-Benutzer eintragen – ohne Web-Zugangsdaten bleibt die RSSI-Abfrage deaktiviert.",
         "data": {
-          "scan_interval": "Status-Intervall (Sek.)",
-          "zones_interval": "Melder-/Zonen-Intervall (Sek.)",
+          "zones_interval": "Zonen-Intervall (Sek.)",
+          "faults_interval": "Fehler-Intervall (Sek.)",
+          "mode_interval": "Alarmzustand-Intervall (Sek.)",
+          "extensive_interval": "Umfangreiche Abfrage / RSSI (Min.)",
+          "fetch_outputs": "Ausgänge im Zonen-Takt mitfragen",
+          "reconnect_delay": "Wartezeit nach Verbindungsabbruch (Sek.)",
           "web_username": "Web-Benutzer / Code (nur RSSI)",
           "web_password": "Web-Passwort (nur RSSI)",
           "retries": "Wiederholungen bei Fehlern",

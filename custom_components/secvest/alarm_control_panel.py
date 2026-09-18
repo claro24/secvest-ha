@@ -98,7 +98,7 @@ class SecvestAlarm(AlarmControlPanelEntity):
         Always refresh zones live (may take longer), then decide if arming is allowed.
         This prevents arming being blocked by stale zone cache.
         """
-        zones = await self.coordinator.api.get_zones()
+        zones = await self.coordinator.async_get_zones_live()
 
         # Friendly-name mapping from coordinator (keeps naming consistent)
         from .coordinator import normalize_name  # local import to avoid cycles
