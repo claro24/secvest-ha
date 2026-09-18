@@ -4,7 +4,7 @@ Custom Integration zur Anbindung einer ABUS Secvest Alarmanlage an Home Assistan
 
 Diese Integration ist nicht offiziell von ABUS und nicht mit ABUS verbunden.
 
-Vielen Dank an Jochen aka Birdy aus dem alarmforum.de. Er hat mir seine Dateien zur Verfügung gestellt und ich habe einige seiner Ideen in diese Integration übernommen.
+Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Vielen Dank an dkmouk für die Basis dieser Integration, und an Jochen aka Birdy aus dem alarmforum.de, der dkmouk seine Dateien zur Verfügung gestellt hat und dessen Ideen darin eingeflossen sind.
 
 ## Funktionen
 
@@ -53,7 +53,7 @@ Vielen Dank an Jochen aka Birdy aus dem alarmforum.de. Er hat mir seine Dateien 
 4. Diese Repository-URL eintragen:
 
    ```text
-   https://github.com/dkmouk/secvest-ha
+   https://github.com/claro24/secvest-ha
    ```
 
 5. Als Kategorie **Integration** auswählen.
@@ -198,7 +198,7 @@ Custom integration for connecting an ABUS Secvest alarm system to Home Assistant
 
 This integration is unofficial and is not affiliated with ABUS.
 
-Many thanks to Jochen, aka Birdy, from alarmforum.de. He shared his files with me and some of his ideas have been incorporated into this integration.
+This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Many thanks to dkmouk for the foundation of this integration, and to Jochen, aka Birdy, from alarmforum.de, who shared his files with dkmouk and whose ideas were incorporated into it.
 
 ## Features
 
@@ -247,7 +247,7 @@ Many thanks to Jochen, aka Birdy, from alarmforum.de. He shared his files with m
 4. Add this repository URL:
 
    ```text
-   https://github.com/dkmouk/secvest-ha
+   https://github.com/claro24/secvest-ha
    ```
 
 5. Select **Integration** as the category.
