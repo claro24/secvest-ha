@@ -23,6 +23,24 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.1
+
+Die Alarmzentrale bildet jetzt zusätzlich zu Scharf/Teilscharf/Unscharf auch Alarm- und Quittierungszustände auf die Home-Assistant-Standardzustände ab:
+
+| Rohwert (Secvest) | Home Assistant | Bedeutung (DE) |
+|---|---|---|
+| `unset` | `disarmed` | Unscharf |
+| `partset` | `armed_home` | Teilscharf |
+| `set` | `armed_away` | Scharf |
+| `unset-alarm` | `pending` | Eingangsverzögerung |
+| `set-alarm` | `triggered` | Alarm |
+| `partset-alarm` | `triggered` | Alarm (teilscharf) |
+| `acknowledged` | `disarmed` | Unscharf, Alarm noch nicht quittiert |
+
+Zusätzlich am Alarm-Panel verfügbar: `raw_mode` (unveränderter Rohwert) und `alarm_memory` (true, solange ein Alarm ausgelöst und noch nicht zurückgesetzt ist). Unbekannte Rohwerte ergeben weiterhin `unbekannt`/`None` und werden einmalig als Warnung geloggt.
+
+**Hinweis:** Diese Zuordnung wurde anhand eines einzelnen echten Alarms und dem Secvest-Logbuch abgeleitet, nicht aus offizieller Dokumentation. `partset-alarm` wurde dabei nicht beobachtet (nur analog zu `set-alarm` angenommen), und für die Ausgangsverzögerung ist bisher kein eigener Rohwert bekannt. Rückmeldungen zu abweichenden Werten sind willkommen.
+
 ## Neu in Version 0.3.0
 
 - Verbindung bleibt dauerhaft offen (Keep-Alive) statt bei jeder Abfrage neu aufzubauen; TLS-Handshake der Secvest-API entfällt dadurch bei den meisten Abfragen (~6-7s → <100ms)
@@ -216,6 +234,24 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.1
+
+The alarm panel now also maps alarm and acknowledgement states, not just armed/disarmed, onto Home Assistant's standard states:
+
+| Raw value (Secvest) | Home Assistant | Meaning |
+|---|---|---|
+| `unset` | `disarmed` | Disarmed |
+| `partset` | `armed_home` | Armed home |
+| `set` | `armed_away` | Armed away |
+| `unset-alarm` | `pending` | Entry delay |
+| `set-alarm` | `triggered` | Triggered |
+| `partset-alarm` | `triggered` | Triggered (armed home) |
+| `acknowledged` | `disarmed` | Disarmed, alarm not yet acknowledged |
+
+Also newly available on the alarm panel: `raw_mode` (the unmodified raw value) and `alarm_memory` (true while an alarm has been triggered and not yet cleared). Unknown raw values still show as `unknown`/`None` and are logged once as a warning.
+
+**Note:** This mapping was derived from a single real alarm event and the Secvest's own log, not from official documentation. `partset-alarm` was not observed (only assumed analogous to `set-alarm`), and no dedicated raw value for the exit delay is known yet. Feedback on deviating values is welcome.
 
 ## New in Version 0.3.0
 

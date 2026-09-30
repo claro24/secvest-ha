@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 import aiohttp
 from homeassistant.components.alarm_control_panel import (
@@ -15,7 +16,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import SecvestApiError
-from .const import DOMAIN
+from .const import ALARM_MEMORY_MODES, DOMAIN, RAW_TO_HA_STATE
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,19 +50,32 @@ class SecvestAlarm(AlarmControlPanelEntity):
         self.coordinator = coordinator
         self._remove_coordinator_listener = None
         self._attr_unique_id = f"{entry.entry_id}_alarm"
+        self._warned_unknown_raw_modes: set[str] = set()
 
     @property
-    def state(self) -> AlarmControlPanelState | None:
+    def alarm_state(self) -> AlarmControlPanelState | None:
         d = self.coordinator.data
-        if not d:
+        if not d or not d.raw_mode:
             return None
-        if d.raw_mode == "unset":
-            return AlarmControlPanelState.DISARMED
-        if d.raw_mode == "partset":
-            return AlarmControlPanelState.ARMED_HOME
-        if d.raw_mode == "set":
-            return AlarmControlPanelState.ARMED_AWAY
-        return None
+        ha_state = RAW_TO_HA_STATE.get(d.raw_mode)
+        if ha_state is None:
+            if d.raw_mode not in self._warned_unknown_raw_modes:
+                self._warned_unknown_raw_modes.add(d.raw_mode)
+                _LOGGER.warning(
+                    "Secvest: unbekannter Alarmzustand-Rohwert '%s' - bitte melden, "
+                    "damit das Mapping ergaenzt werden kann",
+                    d.raw_mode,
+                )
+            return None
+        return AlarmControlPanelState(ha_state)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        raw_mode = self.coordinator.data.raw_mode if self.coordinator.data else None
+        return {
+            "raw_mode": raw_mode,
+            "alarm_memory": raw_mode in ALARM_MEMORY_MODES if raw_mode else False,
+        }
 
     # -----------------------
     # New-style async methods
