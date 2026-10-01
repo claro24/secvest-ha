@@ -2,13 +2,25 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import (
+    SensorDeviceClass,
+    SensorEntity,
+    SensorStateClass,
+)
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
+
+_TIER_LABELS = {
+    "zones": "Zonen",
+    "faults": "Fehler",
+    "mode": "Alarmzustand",
+    "extensive": "Umfangreiche Abfrage",
+}
 
 
 def _faults(data: Any) -> list[dict[str, Any]]:
@@ -33,20 +45,22 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][entry.entry_id]
     coordinator = data["coordinator"]
 
-    async_add_entities(
-        [
-            SecvestSimpleSensor(coordinator, entry, "Secvest Mode (Raw)", "raw_mode"),
-            SecvestSimpleSensor(coordinator, entry, "Secvest Mode (DE)", "human_mode"),
-            SecvestSimpleSensor(coordinator, entry, "Open Zones (CSV)", "open_zones_csv"),
-            SecvestSimpleSensor(coordinator, entry, "Open Zones Spoken", "open_zones_spoken"),
-            SecvestDerivedSensor(coordinator, entry, "Open Zones Count", "open_zones_count"),
-            SecvestDerivedSensor(coordinator, entry, "Secvest Faults Anzahl", "fault_count"),
-            SecvestFaultListSensor(coordinator, entry),
-            SecvestDerivedSensor(coordinator, entry, "Secvest Outputs Anzahl", "output_count"),
-            SecvestSimpleSensor(coordinator, entry, "Last Error", "last_error"),
-        ],
-        True,
-    )
+    entities: list[SensorEntity] = [
+        SecvestSimpleSensor(coordinator, entry, "Secvest Mode (Raw)", "raw_mode"),
+        SecvestSimpleSensor(coordinator, entry, "Secvest Mode (DE)", "human_mode"),
+        SecvestSimpleSensor(coordinator, entry, "Open Zones (CSV)", "open_zones_csv"),
+        SecvestSimpleSensor(coordinator, entry, "Open Zones Spoken", "open_zones_spoken"),
+        SecvestDerivedSensor(coordinator, entry, "Open Zones Count", "open_zones_count"),
+        SecvestDerivedSensor(coordinator, entry, "Secvest Faults Anzahl", "fault_count"),
+        SecvestFaultListSensor(coordinator, entry),
+        SecvestDerivedSensor(coordinator, entry, "Secvest Outputs Anzahl", "output_count"),
+        SecvestSimpleSensor(coordinator, entry, "Last Error", "last_error"),
+    ]
+    for tier in _TIER_LABELS:
+        entities.append(SecvestResponseTimeSensor(coordinator, entry, tier))
+        entities.append(SecvestSkippedCountSensor(coordinator, entry, tier))
+
+    async_add_entities(entities, True)
 
 
 class SecvestBaseEntity:
@@ -143,3 +157,42 @@ class SecvestFaultListSensor(SecvestBaseEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {"faults": _faults(self.coordinator.data)}
+
+
+class SecvestResponseTimeSensor(SecvestBaseEntity, SensorEntity):
+    """Gleitende durchschnittliche Antwortzeit (letzte 20 Werte) einer Abfrage-Ebene."""
+
+    _attr_icon = "mdi:timer-outline"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MILLISECONDS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, coordinator, entry: ConfigEntry, tier: str) -> None:
+        SecvestBaseEntity.__init__(self, coordinator, entry)
+        self._tier = tier
+        self._attr_name = f"Secvest Antwortzeit {_TIER_LABELS[tier]} (Ø)"
+        self._attr_unique_id = f"{entry.entry_id}_sensor_response_time_{tier}"
+
+    @property
+    def native_value(self) -> float | None:
+        return self.coordinator.average_response_time_ms(self._tier)
+
+
+class SecvestSkippedCountSensor(SecvestBaseEntity, SensorEntity):
+    """Anzahl Abfragen einer Ebene, die uebersprungen wurden, weil das Geraet
+    durch eine andere, gerade laufende Abfrage beschaeftigt war."""
+
+    _attr_icon = "mdi:debug-step-over"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+
+    def __init__(self, coordinator, entry: ConfigEntry, tier: str) -> None:
+        SecvestBaseEntity.__init__(self, coordinator, entry)
+        self._tier = tier
+        self._attr_name = f"Secvest Übersprungen {_TIER_LABELS[tier]}"
+        self._attr_unique_id = f"{entry.entry_id}_sensor_skipped_{tier}"
+
+    @property
+    def native_value(self) -> int:
+        return self.coordinator.skipped_count(self._tier)

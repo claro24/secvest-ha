@@ -23,6 +23,13 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.2
+
+- **Scheduling-Fix:** Die vier Abfrage-Ebenen starten jetzt mit 1 Sekunde Versatz zueinander. Bisher liefen z. B. Zonen- und Fehler-Abfrage bei gleichem Intervall exakt synchron und haben sich dauerhaft gegenseitig um das gemeinsame Lock blockiert ("Abfrage ausgesetzt, Gerät beschäftigt" bei jedem zweiten Tick) — das war kein Zeichen echter Überlastung, sondern ein reiner Scheduling-Kollisionsartefakt.
+- **Neue Diagnose-Sensoren** (Kategorie "Diagnose" in der Geräte-Ansicht), je Abfrage-Ebene (Zonen, Fehler, Alarmzustand, umfangreiche Abfrage):
+  - *Antwortzeit (Ø)* – gleitender Durchschnitt der letzten 20 tatsächlich ausgeführten Abfragen in Millisekunden
+  - *Übersprungen* – Anzahl Ticks seit dem letzten Neustart, die ausgesetzt wurden, weil das Gerät durch eine andere Ebene beschäftigt war
+
 ## Neu in Version 0.3.1
 
 Die Alarmzentrale bildet jetzt zusätzlich zu Scharf/Teilscharf/Unscharf auch Alarm- und Quittierungszustände auf die Home-Assistant-Standardzustände ab:
@@ -234,6 +241,13 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.2
+
+- **Scheduling fix:** the four polling tiers now start with a 1-second stagger between them. Previously, e.g. the zones and faults polls (same default interval) ran perfectly in sync and permanently contended for the shared lock ("poll skipped, device busy" on every other tick) — not a sign of real overload, just a scheduling collision artifact.
+- **New diagnostic sensors** (under the "Diagnostic" section of the device view), per polling tier (zones, faults, alarm state, extensive poll):
+  - *Response time (avg)* – rolling average of the last 20 actually executed requests, in milliseconds
+  - *Skipped* – number of ticks since the last restart that were skipped because the device was busy with another tier
 
 ## New in Version 0.3.1
 
