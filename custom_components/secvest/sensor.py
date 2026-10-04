@@ -58,7 +58,7 @@ async def async_setup_entry(
     ]
     for tier in _TIER_LABELS:
         entities.append(SecvestResponseTimeSensor(coordinator, entry, tier))
-        entities.append(SecvestSkippedCountSensor(coordinator, entry, tier))
+        entities.append(SecvestWaitTimeSensor(coordinator, entry, tier))
 
     async_add_entities(entities, True)
 
@@ -159,8 +159,18 @@ class SecvestFaultListSensor(SecvestBaseEntity, SensorEntity):
         return {"faults": _faults(self.coordinator.data)}
 
 
+def _tier_available(coordinator, tier: str) -> bool:
+    """Die umfangreiche Abfrage laeuft gar nicht, wenn keine Web-Credentials
+    (RSSI) konfiguriert sind - dann zeigen ihre Diagnose-Sensoren "nicht
+    verfuegbar" statt dauerhaft einen leeren/unbekannten Wert."""
+    if tier == "extensive":
+        return bool(getattr(coordinator, "wireless_enabled", True))
+    return True
+
+
 class SecvestResponseTimeSensor(SecvestBaseEntity, SensorEntity):
-    """Gleitende durchschnittliche Antwortzeit (letzte 20 Werte) einer Abfrage-Ebene."""
+    """Gleitende durchschnittliche reine API-Antwortzeit (letzte 20 Werte,
+    ohne Wartezeit auf das gemeinsame Lock) einer Abfrage-Ebene."""
 
     _attr_icon = "mdi:timer-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -175,24 +185,36 @@ class SecvestResponseTimeSensor(SecvestBaseEntity, SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_sensor_response_time_{tier}"
 
     @property
+    def available(self) -> bool:
+        return _tier_available(self.coordinator, self._tier)
+
+    @property
     def native_value(self) -> float | None:
         return self.coordinator.average_response_time_ms(self._tier)
 
 
-class SecvestSkippedCountSensor(SecvestBaseEntity, SensorEntity):
-    """Anzahl Abfragen einer Ebene, die uebersprungen wurden, weil das Geraet
-    durch eine andere, gerade laufende Abfrage beschaeftigt war."""
+class SecvestWaitTimeSensor(SecvestBaseEntity, SensorEntity):
+    """Gleitende durchschnittliche Wartezeit (letzte 20 Werte) einer Ebene auf
+    das gemeinsame Lock, weil eine andere Ebene gerade eine Abfrage laufen
+    hatte. Hoch heisst haeufige Kollisionen, nicht zwangsweise ein Problem
+    der Secvest selbst - der Request wird dadurch nur verzoegert, nie verworfen."""
 
-    _attr_icon = "mdi:debug-step-over"
+    _attr_icon = "mdi:timer-sand"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_device_class = SensorDeviceClass.DURATION
+    _attr_native_unit_of_measurement = UnitOfTime.MILLISECONDS
+    _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, coordinator, entry: ConfigEntry, tier: str) -> None:
         SecvestBaseEntity.__init__(self, coordinator, entry)
         self._tier = tier
-        self._attr_name = f"Secvest Übersprungen {_TIER_LABELS[tier]}"
-        self._attr_unique_id = f"{entry.entry_id}_sensor_skipped_{tier}"
+        self._attr_name = f"Secvest Wartezeit {_TIER_LABELS[tier]} (Ø)"
+        self._attr_unique_id = f"{entry.entry_id}_sensor_wait_time_{tier}"
 
     @property
-    def native_value(self) -> int:
-        return self.coordinator.skipped_count(self._tier)
+    def available(self) -> bool:
+        return _tier_available(self.coordinator, self._tier)
+
+    @property
+    def native_value(self) -> float | None:
+        return self.coordinator.average_wait_time_ms(self._tier)

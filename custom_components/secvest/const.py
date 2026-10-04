@@ -90,5 +90,5 @@ STATE_TRANSLATIONS = {
     MODE_UNSET_ALARM: "Eingangsverzögerung",
     MODE_SET_ALARM: "Alarm",
     MODE_PARTSET_ALARM: "Alarm (teilscharf)",
-    MODE_ACKNOWLEDGED: "Unscharf (Alarm nicht quittiert)",
+    MODE_ACKNOWLEDGED: "Alarmabbruch",
 }

@@ -62,13 +62,14 @@ def make_spoken_zone_list(zones: list[str]) -> str:
 class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
     """Haelt eine dauerhafte Verbindung offen und pollt vier unabhaengige,
     getrennt konfigurierbare Ebenen (Zonen, Fehler, Alarmzustand, umfangreiche
-    Wireless-Abfrage). Ein gemeinsames Lock sorgt dafuer, dass nie zwei
-    Abfragen gleichzeitig laufen; ist das Geraet gerade beschaeftigt, wird der
-    Tick uebersprungen statt eingereiht (keine Warteschlange, keine
-    Ueberlastung)."""
+    Wireless-Abfrage). Ein gemeinsames Lock serialisiert alle Anfragen: ist
+    das Geraet gerade mit einer anderen Ebene beschaeftigt, wartet der naechste
+    Tick auf das Lock (Warteschlange der Tiefe 1 pro Ebene, da jede Ebene ihre
+    eigene sequentielle Schleife ist) statt verworfen zu werden - eine
+    Aktualisierung kann sich dadurch verzoegern, geht aber nie verloren."""
 
     _TIER_NAMES = ("zones", "faults", "mode", "extensive")
-    _RESPONSE_TIME_WINDOW = 20
+    _METRIC_WINDOW = 20
 
     def __init__(
         self,
@@ -80,6 +81,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         mode_interval_s: int,
         extensive_interval_min: int,
         fetch_outputs: bool,
+        wireless_enabled: bool,
         zone_name_map: dict[str, str] | None = None,
         breaker_threshold: int = 5,
         breaker_cooldown: int = 300,
@@ -94,6 +96,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         self._mode_interval = max(1, int(mode_interval_s))
         self._extensive_interval = max(60, int(extensive_interval_min) * 60)
         self._fetch_outputs = fetch_outputs
+        self.wireless_enabled = wireless_enabled
         self._reconnect_delay = max(1, int(reconnect_delay_s))
 
         # Circuit breaker: Eskalationsstufe, falls der schnelle Reconnect
@@ -108,37 +111,36 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         self._request_lock = asyncio.Lock()
         self._tasks: list[asyncio.Task[None]] = []
 
-        # Diagnose: gleitende Antwortzeit (letzte 20 Werte) und Anzahl
-        # uebersprungener Ticks je Ebene, weil das Lock belegt war
+        # Diagnose: gleitende Antwortzeit und Wartezeit auf das Lock
+        # (je letzte 20 Werte) pro Ebene
         self._response_times: dict[str, deque[float]] = {
-            name: deque(maxlen=self._RESPONSE_TIME_WINDOW) for name in self._TIER_NAMES
+            name: deque(maxlen=self._METRIC_WINDOW) for name in self._TIER_NAMES
         }
-        self._skipped_counts: dict[str, int] = {name: 0 for name in self._TIER_NAMES}
+        self._wait_times: dict[str, deque[float]] = {
+            name: deque(maxlen=self._METRIC_WINDOW) for name in self._TIER_NAMES
+        }
 
     # -------------------------
     # Lifecycle
     # -------------------------
 
     def async_start(self) -> None:
-        """Startet die vier unabhaengigen Poll-Loops."""
+        """Startet die unabhaengigen Poll-Loops. Die umfangreiche Abfrage laeuft
+        nur, wenn Web-Credentials fuer RSSI/Wireless konfiguriert sind - ohne
+        sie wuerde sie ohnehin nur alle paar Minuten ins Leere laufen."""
         if self._tasks:
             return
-        loops: tuple[tuple[str, Callable[[], Awaitable[None]], float], ...] = (
+        loops: list[tuple[str, Callable[[], Awaitable[None]], float]] = [
             ("zones", self._fetch_zones, self._zones_interval),
             ("faults", self._fetch_faults, self._faults_interval),
             ("mode", self._fetch_mode, self._mode_interval),
-            ("extensive", self._fetch_extensive, self._extensive_interval),
-        )
-        # Kleiner Versatz je Ebene (1s Schritte): ohne ihn ticken z.B. Zonen und
-        # Fehler bei gleichem Intervall exakt synchron, und die zuerst erzeugte
-        # Task gewinnt dann dauerhaft jedes Mal das Lock - die andere wuerde
-        # jeden Tick uebersprungen, nicht nur bei echter Ueberlastung.
-        for stagger, (name, fetch_fn, interval_s) in enumerate(loops):
+        ]
+        if self.wireless_enabled:
+            loops.append(("extensive", self._fetch_extensive, self._extensive_interval))
+
+        for name, fetch_fn, interval_s in loops:
             self._tasks.append(
-                self._create_task(
-                    self._loop(name, fetch_fn, interval_s, initial_delay=float(stagger)),
-                    f"secvest_{name}_poll",
-                )
+                self._create_task(self._loop(name, fetch_fn, interval_s), f"secvest_{name}_poll")
             )
 
     def _create_task(self, coro: Awaitable[None], name: str) -> asyncio.Task[None]:
@@ -155,18 +157,10 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             await asyncio.gather(*tasks, return_exceptions=True)
 
     # -------------------------
-    # Scheduling: ein Request gleichzeitig, ueberspringen statt einreihen
+    # Scheduling: ein Request gleichzeitig, wartend statt verwerfend
     # -------------------------
 
-    async def _loop(
-        self,
-        name: str,
-        fetch_fn: Callable[[], Awaitable[None]],
-        interval_s: float,
-        initial_delay: float = 0.0,
-    ) -> None:
-        if initial_delay:
-            await asyncio.sleep(initial_delay)
+    async def _loop(self, name: str, fetch_fn: Callable[[], Awaitable[None]], interval_s: float) -> None:
         while True:
             sleep_for = await self._run_tier(name, fetch_fn, interval_s)
             await asyncio.sleep(sleep_for)
@@ -176,24 +170,26 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         if now < self._breaker_until:
             return max(1.0, min(interval_s, self._breaker_until - now))
 
-        if self._request_lock.locked():
-            self._skipped_counts[name] += 1
-            _LOGGER.debug("Secvest %s-Abfrage ausgesetzt (Geraet gerade beschaeftigt)", name)
-            return interval_s
+        # Ist das Lock gerade belegt, wartet dieser Tick hier - keine eigene
+        # Warteschlange noetig, da jede Ebene ohnehin nur eine Schleife ist und
+        # sich nie selbst ueberholen kann (max. ein Warter pro Ebene).
+        wait_start = time.monotonic()
+        async with self._request_lock:
+            self._wait_times[name].append(time.monotonic() - wait_start)
 
-        start = time.monotonic()
-        try:
-            async with self._request_lock:
+            start = time.monotonic()
+            try:
                 await fetch_fn()
-        except (asyncio.TimeoutError, SecvestApiError) as err:
-            self._handle_failure(name, err)
-            return self._reconnect_delay
-        except Exception as err:  # unerwarteter Fehler: nicht die Loop sterben lassen
-            _LOGGER.exception("Secvest %s-Abfrage fehlgeschlagen (unerwartet)", name)
-            self._handle_failure(name, err)
-            return self._reconnect_delay
+            except (asyncio.TimeoutError, SecvestApiError) as err:
+                self._handle_failure(name, err)
+                return self._reconnect_delay
+            except Exception as err:  # unerwarteter Fehler: nicht die Loop sterben lassen
+                _LOGGER.exception("Secvest %s-Abfrage fehlgeschlagen (unerwartet)", name)
+                self._handle_failure(name, err)
+                return self._reconnect_delay
 
-        self._response_times[name].append(time.monotonic() - start)
+            self._response_times[name].append(time.monotonic() - start)
+
         self._consecutive_failures = 0
         self._breaker_until = 0.0
         self._last_error = None
@@ -204,16 +200,21 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
     # -------------------------
 
     def average_response_time_ms(self, name: str) -> float | None:
-        """Gleitender Durchschnitt (letzte 20 Werte) der Antwortzeit einer Ebene in ms."""
+        """Gleitender Durchschnitt (letzte 20 Werte) der reinen API-Antwortzeit
+        einer Ebene in ms - ohne Wartezeit auf das gemeinsame Lock."""
         times = self._response_times.get(name)
         if not times:
             return None
         return round(sum(times) / len(times) * 1000, 1)
 
-    def skipped_count(self, name: str) -> int:
-        """Anzahl Ticks einer Ebene, die seit dem Start uebersprungen wurden, weil
-        das gemeinsame Lock belegt war (Geraet durch eine andere Ebene beschaeftigt)."""
-        return self._skipped_counts.get(name, 0)
+    def average_wait_time_ms(self, name: str) -> float | None:
+        """Gleitender Durchschnitt (letzte 20 Werte) der Wartezeit einer Ebene
+        auf das gemeinsame Lock in ms - hoch bedeutet haeufige Kollisionen
+        mit anderen Ebenen, nicht zwangsweise ein Problem der Secvest selbst."""
+        times = self._wait_times.get(name)
+        if not times:
+            return None
+        return round(sum(times) / len(times) * 1000, 1)
 
     def _handle_failure(self, name: str, err: Exception) -> None:
         self._consecutive_failures += 1

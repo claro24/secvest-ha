@@ -93,6 +93,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         mode_interval_s=mode_interval,
         extensive_interval_min=extensive_interval,
         fetch_outputs=fetch_outputs,
+        wireless_enabled=bool(auth.web_username and auth.web_password),
         reconnect_delay_s=reconnect_delay,
         breaker_threshold=breaker_threshold,
         breaker_cooldown=breaker_cooldown,

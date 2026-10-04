@@ -23,6 +23,13 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.3
+
+- **Warteschlange statt Versatz:** Der feste 1-Sekunden-Versatz aus 0.3.2 löste nur die ursprüngliche Kollision (Zonen/Fehler, gleiches Intervall), erzeugte aber durch unterschiedliche Intervalle (Alarmzustand = 5s) neue periodische Kollisionen (alle 15s). Jetzt wird eine Abfrage, die auf das gemeinsame Lock trifft, nicht mehr übersprungen, sondern wartet, bis die andere Ebene fertig ist — eine Aktualisierung kann sich dadurch kurz verzögern, geht aber nie mehr verloren. Der Versatz entfällt, da er dafür nicht mehr nötig ist.
+- Die Diagnose-Sensoren *Übersprungen* je Ebene sind damit hinfällig und wurden durch **Wartezeit (Ø)** je Ebene ersetzt (gleitender Durchschnitt der letzten 20 Werte, in ms) — die alten Sensoren bleiben als verwaiste Entities in der HA-Registry zurück und können manuell entfernt werden.
+- **Umfangreiche Abfrage ohne Web-Credentials:** Läuft jetzt gar nicht mehr an, wenn kein Web-Benutzer/Passwort (RSSI) in den Optionen gesetzt ist, statt alle paar Minuten ins Leere zu laufen. Die zugehörigen Diagnose-Sensoren zeigen in diesem Fall "nicht verfügbar" statt dauerhaft "Unbekannt".
+- Übersetzung korrigiert: Rohwert `acknowledged` heißt auf dem Secvest-Mode-(DE)-Sensor jetzt **"Alarmabbruch"** statt "Unscharf (Alarm nicht quittiert)".
+
 ## Neu in Version 0.3.2
 
 - **Scheduling-Fix:** Die vier Abfrage-Ebenen starten jetzt mit 1 Sekunde Versatz zueinander. Bisher liefen z. B. Zonen- und Fehler-Abfrage bei gleichem Intervall exakt synchron und haben sich dauerhaft gegenseitig um das gemeinsame Lock blockiert ("Abfrage ausgesetzt, Gerät beschäftigt" bei jedem zweiten Tick) — das war kein Zeichen echter Überlastung, sondern ein reiner Scheduling-Kollisionsartefakt.
@@ -42,7 +49,7 @@ Die Alarmzentrale bildet jetzt zusätzlich zu Scharf/Teilscharf/Unscharf auch Al
 | `unset-alarm` | `pending` | Eingangsverzögerung |
 | `set-alarm` | `triggered` | Alarm |
 | `partset-alarm` | `triggered` | Alarm (teilscharf) |
-| `acknowledged` | `disarmed` | Unscharf, Alarm noch nicht quittiert |
+| `acknowledged` | `disarmed` | Alarmabbruch |
 
 Zusätzlich am Alarm-Panel verfügbar: `raw_mode` (unveränderter Rohwert) und `alarm_memory` (true, solange ein Alarm ausgelöst und noch nicht zurückgesetzt ist). Unbekannte Rohwerte ergeben weiterhin `unbekannt`/`None` und werden einmalig als Warnung geloggt.
 
@@ -242,6 +249,13 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - German and English interface
 - Diagnostic export for troubleshooting
 
+## New in Version 0.3.3
+
+- **Queue instead of stagger:** the fixed 1-second stagger from 0.3.2 only fixed the original collision (zones/faults, same interval), but created new periodic collisions (every 15s) because of the differing alarm-state interval (5s). A poll that now hits the shared lock no longer gets skipped - it waits until the other tier is done, so an update may be briefly delayed but is never lost anymore. The stagger is gone since it's no longer needed for that.
+- The per-tier *Skipped* diagnostic sensors are therefore obsolete and have been replaced with **Wait time (avg)** per tier (rolling average of the last 20 values, in ms) - the old sensors remain as orphaned entities in the HA registry and can be removed manually.
+- **Extensive poll without web credentials:** no longer runs at all if no web user/password (RSSI) is set in the options, instead of polling into the void every few minutes. The related diagnostic sensors now show "unavailable" instead of a permanent "unknown".
+- Fixed translation: the `acknowledged` raw value now shows as **"Alarmabbruch"** (alarm aborted) on the Secvest Mode (DE) sensor instead of "Disarmed, alarm not yet acknowledged".
+
 ## New in Version 0.3.2
 
 - **Scheduling fix:** the four polling tiers now start with a 1-second stagger between them. Previously, e.g. the zones and faults polls (same default interval) ran perfectly in sync and permanently contended for the shared lock ("poll skipped, device busy" on every other tick) — not a sign of real overload, just a scheduling collision artifact.
@@ -261,7 +275,7 @@ The alarm panel now also maps alarm and acknowledgement states, not just armed/d
 | `unset-alarm` | `pending` | Entry delay |
 | `set-alarm` | `triggered` | Triggered |
 | `partset-alarm` | `triggered` | Triggered (armed home) |
-| `acknowledged` | `disarmed` | Disarmed, alarm not yet acknowledged |
+| `acknowledged` | `disarmed` | Alarm aborted |
 
 Also newly available on the alarm panel: `raw_mode` (the unmodified raw value) and `alarm_memory` (true while an alarm has been triggered and not yet cleared). Unknown raw values still show as `unknown`/`None` and are logged once as a warning.
 

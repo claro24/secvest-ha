@@ -1,7 +1,7 @@
 {
   "domain": "secvest",
   "name": "ABUS Secvest",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "documentation": "https://github.com/claro24/secvest-ha",
   "issue_tracker": "https://github.com/claro24/secvest-ha/issues",
   "requirements": ["aiohttp>=3.9.0"],
