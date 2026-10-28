@@ -20,6 +20,15 @@ from .const import ALARM_MEMORY_MODES, DOMAIN, RAW_TO_HA_STATE
 
 _LOGGER = logging.getLogger(__name__)
 
+# Fault-Type "5000" = "Zone offen, blockiert Scharfschalten" - bestaetigt durch
+# externe Reverse-Engineering-Doku (thomasdanz/secvest-api, ha-secvest Issue #95:
+# bisher nur "1170" = Repeater-Batterie niedrig und "5000" = Zone offen
+# beobachtet). Nicht alarmspezifisch, aber stabil genug, um andere Fault-Typen
+# (z.B. Batterie) aus der Liste der "offenen Zonen waehrend eines Alarms"
+# auszuschliessen. Ein-/Ausgangszonen erzeugen laut derselben Doku bewusst
+# keinen solchen Fault, auch wenn sie kurz offen waren.
+_FAULT_TYPE_ZONE_OPEN = "5000"
+
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -34,14 +43,14 @@ async def async_setup_entry(
 def _triggered_zone_names(data: Any) -> list[str]:
     """Zonennamen, die laut aktueller Fault-Liste zum Alarm gehoeren.
 
-    Bewusst einfach gehalten: nimmt jeden Fault mit "affects-zone", ohne nach
-    Fault-Type zu filtern (dessen genaue Bedeutung ist noch nicht eindeutig
-    geklaert - siehe Diskussion). Nur relevant, waehrend alarm_memory aktiv
-    ist; kann faelschlich auch unabhaengige Faults (z.B. Batterie) auflisten,
-    wenn die zufaellig gleichzeitig anliegen.
+    Nur relevant, waehrend alarm_memory aktiv ist. Gefiltert auf Fault-Type
+    "5000" (siehe oben), damit z.B. eine zeitgleich anliegende Batteriemeldung
+    nicht faelschlich als "hat den Alarm ausgeloest" auftaucht.
     """
     names: list[str] = []
     for fault in data.faults:
+        if str(fault.get("type") or "") != _FAULT_TYPE_ZONE_OPEN:
+            continue
         zone_id = str(fault.get("affects-zone") or "").strip()
         if not zone_id:
             continue

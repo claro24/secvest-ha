@@ -23,11 +23,13 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
-## Neu in Version 0.3.6
+## Neu in Version 0.3.7
 
-Neues Attribut `triggered_zone_names` am Alarm-Panel: zeigt, solange `alarm_memory` aktiv ist, die Namen der Zonen, für die gerade ein Fault mit `affects-zone` vorliegt (z. B. `["Wohnen-BM"]` oder `["Bad-Fenster"]`) — anhand von zwei echten Testalarmen (Bewegungsmelder und Fensterkontakt) gegen reale Log-Daten verifiziert.
+Neues Attribut `triggered_zone_names` am Alarm-Panel: zeigt, solange `alarm_memory` aktiv ist, die Namen der Zonen, für die gerade ein Fault vom Type `5000` mit `affects-zone` vorliegt (z. B. `["Wohnen-BM"]` oder `["Bad-Fenster"]`) — anhand von zwei echten Testalarmen (Bewegungsmelder und Fensterkontakt) gegen reale Log-Daten verifiziert.
 
-**Bewusste Einschränkung:** Es wird nicht nach Fault-Type gefiltert, da dessen genaue Bedeutung noch nicht abschließend geklärt ist (Type "5000" tritt sowohl bei echten Alarmen als auch bei ganz gewöhnlicher Bewegung im unscharfen Zustand auf). Das Attribut kann daher theoretisch auch unabhängige, zufällig gleichzeitig anliegende Faults (z. B. Batterie) mit auflisten. Eine Benutzer-Identifikation beim Quittieren ist mit den aktuell abgefragten Endpoints nicht möglich — keines der Felder in `state`/`zones/`/`faults/`/`output/` enthält eine Benutzerkennung.
+Fault-Type `5000` bedeutet laut externer Reverse-Engineering-Doku ([thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api), [ha-secvest Issue #95](https://github.com/thomasdanz/ha-secvest/issues/95)) generell "Zone offen, blockiert Scharfschalten" — nicht alarmspezifisch, aber stabil genug, um andere, unabhängige Fault-Typen (z. B. `1170` = Repeater-Batterie niedrig) zuverlässig auszuschließen. Ein-/Ausgangszonen erzeugen laut derselben Doku bewusst keinen solchen Fault, auch wenn sie kurz offen waren (bestätigt auch in unserem eigenen Test: die Eingangstür selbst erzeugte nie einen Fault).
+
+Eine Benutzer-Identifikation beim Quittieren eines Alarms ist mit den aktuell abgefragten Endpoints nicht möglich — keines der Felder in `state`/`zones/`/`faults/`/`output/` enthält eine Benutzerkennung, und auch im deutlich gründlicheren Fremd-Projekt gibt es dafür keinen bekannten Log-Eintrag.
 
 ## Neu in Version 0.3.5
 
@@ -276,11 +278,13 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - German and English interface
 - Diagnostic export for troubleshooting
 
-## New in Version 0.3.6
+## New in Version 0.3.7
 
-New `triggered_zone_names` attribute on the alarm panel: while `alarm_memory` is active, lists the names of zones that currently have a fault with `affects-zone` set (e.g. `["Wohnen-BM"]` or `["Bad-Fenster"]`) - verified against real log data from two test alarms (motion detector and window contact).
+New `triggered_zone_names` attribute on the alarm panel: while `alarm_memory` is active, lists the names of zones that currently have a fault of type `5000` with `affects-zone` set (e.g. `["Wohnen-BM"]` or `["Bad-Fenster"]`) - verified against real log data from two test alarms (motion detector and window contact).
 
-**Known limitation:** it does not filter by fault type, since that type's exact meaning isn't fully settled yet (type "5000" occurs both for real alarms and for ordinary motion while disarmed). The attribute can therefore in theory also list unrelated faults (e.g. low battery) that happen to be present at the same time. Identifying which user acknowledged an alarm is not possible with the endpoints currently polled - none of the fields in `state`/`zones/`/`faults/`/`output/` carry a user identity.
+Fault type `5000` generally means "zone open, blocks arming" according to external reverse-engineering docs ([thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api), [ha-secvest issue #95](https://github.com/thomasdanz/ha-secvest/issues/95)) - not alarm-specific, but stable enough to reliably exclude unrelated fault types (e.g. `1170` = repeater battery low). Entry/exit zones deliberately never produce this fault according to the same docs, even if briefly open (also confirmed in our own test: the entry door itself never produced one).
+
+Identifying which user acknowledged an alarm is not possible with the endpoints currently polled - none of the fields in `state`/`zones/`/`faults/`/`output/` carry a user identity, and even the much more thorough third-party project has no known log entry for it either.
 
 ## New in Version 0.3.5
 
