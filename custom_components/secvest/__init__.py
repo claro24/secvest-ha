@@ -157,7 +157,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Benutzer-Zuordnung ueber /logs/ im Hintergrund nachziehen, statt den
         # Service-Call darauf warten zu lassen - sonst wuerde jede Schaltung
-        # um bis zu ~4,5s (Wiederholungen) verzoegert.
+        # verzoegert.
+        _LOGGER.debug("Secvest: plane logs-sync nach Moduswechsel (mode=%s, via service secvest_set_mode)", mode)
         hass.async_create_task(
             coordinator.async_sync_logs_for_mode_change(),
             "secvest_logs_sync",

@@ -259,16 +259,32 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
     async def async_sync_logs_for_mode_change(self) -> None:
         """Fragt das Ereignisprotokoll nach einer Scharf-/Unscharfschaltung
         zeitnah ab, statt auf den naechsten planmaessigen Logs-Poll zu warten.
-        Mit kurzen Wiederholungen, da die Firmware den Log-Eintrag nicht immer
-        sofort bereitstellt. Die eigentliche Zuordnung zum richtigen Wechsel
-        passiert unabhaengig davon in _try_match_pending_changes() - diese
-        Methode beschleunigt nur, wann sie zum ersten Mal versucht wird."""
-        for attempt in range(4):
+        Mit Wiederholungen, da die Firmware den Log-Eintrag nicht immer sofort
+        bereitstellt. Die eigentliche Zuordnung zum richtigen Wechsel passiert
+        unabhaengig davon in _try_match_pending_changes() - diese Methode
+        beschleunigt nur, wann sie zum ersten Mal versucht wird. Findet sich
+        auch nach allen Versuchen nichts, holt der naechste planmaessige
+        Logs-Poll (Standard alle 5 Minuten) es ohnehin rueckwirkend nach."""
+        _LOGGER.debug("Secvest: logs-sync nach Moduswechsel gestartet")
+        attempts = 8
+        for attempt in range(attempts):
             if attempt:
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(2.0)
             found = await self._run_once("logs", self._fetch_logs)
+            _LOGGER.debug(
+                "Secvest: logs-sync Versuch %s/%s, neuer Benutzer-Eintrag gefunden=%s",
+                attempt + 1,
+                attempts,
+                found,
+            )
             if found:
                 return
+        _LOGGER.debug(
+            "Secvest: logs-sync nach Moduswechsel fand in %ss keinen neuen "
+            "Benutzer-Eintrag - wird vom naechsten planmaessigen Logs-Poll "
+            "nachgeholt, falls der Eintrag spaeter erscheint",
+            (attempts - 1) * 2.0,
+        )
 
     def _try_match_pending_changes(self) -> None:
         """Ordnet noch unbestaetigten Mode-Wechseln (_mode_change_history) den
@@ -298,6 +314,16 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                 change["username"] = best["username"]
                 change["action"] = best["action"]
                 best["matched"] = True
+                _LOGGER.debug(
+                    "Secvest: Mode-Wechsel %s->%s (t=%s) zugeordnet zu Log-Eintrag '%s' von Benutzer %s (t=%s, Abstand %.1fs)",
+                    change["from_mode"],
+                    change["to_mode"],
+                    change["timestamp"],
+                    best["action"],
+                    best["username"] or best["user"],
+                    best["timestamp"],
+                    best_diff,
+                )
 
     async def _run_once(self, name: str, fetch_fn: Callable[[], Awaitable[Any]]) -> Any:
         """Fuehrt einen einzelnen Abruf serialisiert ueber das gemeinsame Lock aus
@@ -508,6 +534,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         # nachtraeglich in _try_match_pending_changes(), sobald ein Log-Eintrag
         # dazu verfuegbar ist (auch rueckwirkend bei einem spaeteren Poll).
         if base.raw_mode is not None and base.raw_mode != raw_mode:
+            _LOGGER.debug("Secvest: Mode-Wechsel erkannt %s -> %s", base.raw_mode, raw_mode)
             self._mode_change_history.append(
                 {
                     "timestamp": time.time(),
@@ -549,6 +576,11 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         previous_last_log_timestamp = self._last_log_timestamp
         since = previous_last_log_timestamp + 1 if previous_last_log_timestamp is not None else None
         entries = await self.api.get_logs(since=since)
+        _LOGGER.debug(
+            "Secvest: /logs/ abgefragt (since=%s) -> %s Eintraege erhalten",
+            since,
+            len(entries),
+        )
 
         newest_timestamp = previous_last_log_timestamp
         # Jeder neue Eintrag mit Benutzerbezug wird an die Historie angehaengt

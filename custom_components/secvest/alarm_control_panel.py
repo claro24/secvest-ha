@@ -215,7 +215,8 @@ class SecvestAlarm(AlarmControlPanelEntity):
 
             # Benutzer-Zuordnung ueber /logs/ im Hintergrund nachziehen, statt
             # darauf zu warten - sonst wuerde jede Schaltung ueber die
-            # Alarmzentrale um bis zu ~4,5s (Wiederholungen) verzoegert.
+            # Alarmzentrale verzoegert.
+            _LOGGER.debug("Secvest: plane logs-sync nach Moduswechsel (mode=%s, via alarm_control_panel)", mode)
             self.hass.async_create_task(
                 self.coordinator.async_sync_logs_for_mode_change(),
                 "secvest_logs_sync",

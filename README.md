@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.13
+
+Diagnose-Logging ergänzt, um ein gemeldetes Problem einzukreisen: Scharf-/Unscharfschalten über Home Assistant zeigte keine Benutzer-Zuordnung an, unklar ob der sofortige `/logs/`-Abgleich dabei überhaupt ausgelöst wurde. Neue Debug-Logzeilen (`custom_components.secvest` auf Debug stellen) markieren jetzt jeden Schritt: Planung des Hintergrund-Abgleichs, erkannter Mode-Wechsel, jede `/logs/`-Abfrage mit Trefferzahl, jeden Zuordnungsversuch und das Ergebnis. Das Wiederholungsfenster für den sofortigen Abgleich nach einer Schaltung wurde außerdem von ~4,5s auf ~14s verlängert (8 Versuche, 2s Abstand), falls die Firmware den Log-Eintrag langsamer bereitstellt als ursprünglich angenommen. Kein Verhaltens-Fix, sondern eine Grundlage, um die eigentliche Ursache beim nächsten Test anhand der Logzeilen zu bestimmen.
+
 ## Neu in Version 0.3.12
 
 Der Log-Lesestand (zuletzt verarbeiteter Zeitstempel, plus `log_history` und `mode_change_history`) wird jetzt über HAs Storage-Mechanismus persistiert und beim Start der Integration wiederhergestellt. Dadurch wird das Ereignisprotokoll nach einem Neustart oder Reload immer lückenlos ab dem zuletzt in HA gespeicherten Eintrag weitergelesen, statt bei jedem Start erneut ohne Filter die letzten bis zu 600 Einträge abzufragen (langsamer) bzw. dazwischen liegende Einträge zu verpassen, falls in der Zwischenzeit mehr als 600 Einträge angefallen sind.
@@ -309,6 +313,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.13
+
+Added diagnostic logging to narrow down a reported issue: arming/disarming via Home Assistant showed no user attribution, and it was unclear whether the immediate `/logs/` sync even fired. New debug log lines (set `custom_components.secvest` to debug) now mark every step: scheduling the background sync, a detected mode change, every `/logs/` request with its hit count, every match attempt and its outcome. The retry window for the immediate sync after a switch was also extended from ~4.5s to ~14s (8 attempts, 2s apart), in case the firmware provides the log entry slower than originally assumed. Not a behavior fix - a basis for pinning down the actual cause from the log lines on the next test.
 
 ## New in Version 0.3.12
 
