@@ -23,6 +23,7 @@ from .const import (
     CONF_MODE_INTERVAL,
     CONF_EXTENSIVE_INTERVAL,
     CONF_FETCH_OUTPUTS,
+    CONF_LOGS_INTERVAL,
     CONF_RECONNECT_DELAY,
     CONF_RETRIES,
     CONF_BREAKER_THRESHOLD,
@@ -33,6 +34,7 @@ from .const import (
     DEFAULT_MODE_INTERVAL,
     DEFAULT_EXTENSIVE_INTERVAL,
     DEFAULT_FETCH_OUTPUTS,
+    DEFAULT_LOGS_INTERVAL,
     DEFAULT_RECONNECT_DELAY,
     DEFAULT_RETRIES,
     DEFAULT_BREAKER_THRESHOLD,
@@ -154,6 +156,9 @@ class SecvestOptionsFlowHandler(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_FETCH_OUTPUTS, default=opts.get(CONF_FETCH_OUTPUTS, DEFAULT_FETCH_OUTPUTS)
                 ): bool,
+                vol.Optional(
+                    CONF_LOGS_INTERVAL, default=opts.get(CONF_LOGS_INTERVAL, DEFAULT_LOGS_INTERVAL)
+                ): int,
                 vol.Optional(
                     CONF_RECONNECT_DELAY, default=opts.get(CONF_RECONNECT_DELAY, DEFAULT_RECONNECT_DELAY)
                 ): int,

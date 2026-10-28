@@ -20,6 +20,7 @@ _TIER_LABELS = {
     "faults": "Fehler",
     "mode": "Alarmzustand",
     "extensive": "Umfangreiche Abfrage",
+    "logs": "Ereignisprotokoll",
 }
 
 
@@ -55,6 +56,7 @@ async def async_setup_entry(
         SecvestFaultListSensor(coordinator, entry),
         SecvestDerivedSensor(coordinator, entry, "Secvest Outputs Anzahl", "output_count"),
         SecvestSimpleSensor(coordinator, entry, "Last Error", "last_error"),
+        SecvestLastLogUserSensor(coordinator, entry),
     ]
     for tier in _TIER_LABELS:
         entities.append(SecvestResponseTimeSensor(coordinator, entry, tier))
@@ -218,3 +220,38 @@ class SecvestWaitTimeSensor(SecvestBaseEntity, SensorEntity):
     @property
     def native_value(self) -> float | None:
         return self.coordinator.average_wait_time_ms(self._tier)
+
+
+class SecvestLastLogUserSensor(SecvestBaseEntity, SensorEntity):
+    """Letzter Benutzer, der laut Ereignisprotokoll (/logs/) eine Aktion
+    ausgeloest hat - bestaetigt z.B. fuer Scharf-/Unscharfschalten, generisch
+    fuer jede Log-Zeile mit Benutzerbezug (auch Web-Login, Einstellungen
+    geaendert etc.). Fuer das Quittieren eines Alarms ist noch kein echtes
+    Beispiel bekannt; mit realen Logdaten ggf. nachschaerfen."""
+
+    _attr_name = "Secvest Letzter Benutzer"
+    _attr_icon = "mdi:account-clock"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, entry: ConfigEntry) -> None:
+        SecvestBaseEntity.__init__(self, coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_sensor_last_log_user"
+
+    @property
+    def native_value(self) -> str | None:
+        d = self.coordinator.data
+        if not d or not d.last_log_action:
+            return None
+        return d.last_log_username or d.last_log_user
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        d = self.coordinator.data
+        if not d:
+            return {}
+        return {
+            "user_slot": d.last_log_user,
+            "username": d.last_log_username,
+            "action": d.last_log_action,
+            "timestamp": d.last_log_timestamp,
+        }

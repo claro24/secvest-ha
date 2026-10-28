@@ -27,6 +27,7 @@ from .const import (
     CONF_MODE_INTERVAL,
     CONF_EXTENSIVE_INTERVAL,
     CONF_FETCH_OUTPUTS,
+    CONF_LOGS_INTERVAL,
     CONF_RECONNECT_DELAY,
     CONF_RETRIES,
     CONF_BREAKER_THRESHOLD,
@@ -36,6 +37,7 @@ from .const import (
     DEFAULT_MODE_INTERVAL,
     DEFAULT_EXTENSIVE_INTERVAL,
     DEFAULT_FETCH_OUTPUTS,
+    DEFAULT_LOGS_INTERVAL,
     DEFAULT_RECONNECT_DELAY,
     DEFAULT_RETRIES,
     DEFAULT_BREAKER_THRESHOLD,
@@ -60,6 +62,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     faults_interval = options.get(CONF_FAULTS_INTERVAL, DEFAULT_FAULTS_INTERVAL)
     mode_interval = options.get(CONF_MODE_INTERVAL, DEFAULT_MODE_INTERVAL)
     extensive_interval = options.get(CONF_EXTENSIVE_INTERVAL, DEFAULT_EXTENSIVE_INTERVAL)
+    logs_interval = options.get(CONF_LOGS_INTERVAL, DEFAULT_LOGS_INTERVAL)
     fetch_outputs = options.get(CONF_FETCH_OUTPUTS, DEFAULT_FETCH_OUTPUTS)
     reconnect_delay = options.get(CONF_RECONNECT_DELAY, DEFAULT_RECONNECT_DELAY)
     retries = options.get(CONF_RETRIES, DEFAULT_RETRIES)
@@ -92,6 +95,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         faults_interval_s=faults_interval,
         mode_interval_s=mode_interval,
         extensive_interval_min=extensive_interval,
+        logs_interval_min=logs_interval,
         fetch_outputs=fetch_outputs,
         wireless_enabled=bool(auth.web_username and auth.web_password),
         reconnect_delay_s=reconnect_delay,

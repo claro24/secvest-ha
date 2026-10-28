@@ -42,6 +42,7 @@
           "mode_interval": "Alarm state interval (seconds)",
           "extensive_interval": "Extensive poll / RSSI (minutes)",
           "fetch_outputs": "Fetch outputs alongside zones",
+          "logs_interval": "Event log / user attribution (minutes)",
           "reconnect_delay": "Reconnect delay after connection loss (seconds)",
           "web_username": "Web user / code (RSSI only)",
           "web_password": "Web password (RSSI only)",

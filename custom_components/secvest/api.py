@@ -7,7 +7,7 @@ import random
 import re
 from dataclasses import dataclass
 from typing import Any, Iterable
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from xml.etree import ElementTree
 from .const import DEFAULT_RETRIES
 
@@ -425,6 +425,19 @@ class SecvestApi:
             return [item for item in data["outputs"] if isinstance(item, dict)]
         raise SecvestApiError(f"Invalid outputs payload: {data!r}")
 
+    async def get_logs(self, since: int | None = None) -> list[dict[str, Any]]:
+        # $filter=timestamp ge <unix seconds> liefert nur neue Eintraege seit
+        # dem letzten Abruf. Ohne Filter liefert die Firmware bis zu 600
+        # Eintraege (gesamte Logkapazitaet) - entsprechend langsam, daher nur
+        # beim allerersten Abruf ohne "since" in Kauf nehmen.
+        path = "/logs/"
+        if since is not None:
+            path = f"/logs/?{quote('$filter', safe='$')}={quote(f'timestamp ge {since}')}"
+        data = await self._request_json("GET", paths=(path,))
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+        raise SecvestApiError(f"Invalid logs payload: {data!r}")
+
     async def get_wireless_zones_status(self) -> dict[int, dict[str, Any]]:
         if not self._auth.web_username or not self._auth.web_password:
             return {}
@@ -743,7 +756,11 @@ class SecvestApi:
 
     async def set_mode(self, new_state: str) -> None:
         # PUT endpoint hat bei dir Slash am Ende
-        await self._request_json(
+        # Secvest beantwortet einen ignorierten Wechsel (z.B. direkt von
+        # partset auf set, ohne vorher unset) ebenfalls mit 200 und dem
+        # UNVERAENDERTEN Zustand - ohne diesen Vergleich wuerde HA einen
+        # stillen Fehlschlag faelschlich als Erfolg melden.
+        data = await self._request_json(
             "PUT",
             paths=(
                 "/system/partitions-1/",
@@ -751,5 +768,11 @@ class SecvestApi:
             ),
             json_payload={"state": new_state, "code": self._auth.user_code},
             headers={"Content-Type": "application/json"},
-            expect_json=False,
         )
+        actual_state = data.get("state") if isinstance(data, dict) else None
+        if actual_state != new_state:
+            raise SecvestApiError(
+                f"Secvest hat den Zustand nicht geaendert (angefordert: {new_state!r}, "
+                f"weiterhin: {actual_state!r}) - vermutlich ist ein direkter Wechsel "
+                "zwischen Scharf und Teilscharf nicht erlaubt, bitte erst unscharf schalten."
+            )

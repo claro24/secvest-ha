@@ -44,6 +44,10 @@ class SecvestData:
     open_zones_spoken: str
     available: bool
     last_error: str | None
+    last_log_user: str | None = None
+    last_log_username: str | None = None
+    last_log_action: str | None = None
+    last_log_timestamp: int | None = None
 
 
 def make_spoken_zone_list(zones: list[str]) -> str:
@@ -68,7 +72,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
     eigene sequentielle Schleife ist) statt verworfen zu werden - eine
     Aktualisierung kann sich dadurch verzoegern, geht aber nie verloren."""
 
-    _TIER_NAMES = ("zones", "faults", "mode", "extensive")
+    _TIER_NAMES = ("zones", "faults", "mode", "extensive", "logs")
     _METRIC_WINDOW = 20
 
     def __init__(
@@ -80,6 +84,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         faults_interval_s: int,
         mode_interval_s: int,
         extensive_interval_min: int,
+        logs_interval_min: int,
         fetch_outputs: bool,
         wireless_enabled: bool,
         zone_name_map: dict[str, str] | None = None,
@@ -95,9 +100,12 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         self._faults_interval = max(1, int(faults_interval_s))
         self._mode_interval = max(1, int(mode_interval_s))
         self._extensive_interval = max(60, int(extensive_interval_min) * 60)
+        self._logs_interval = max(60, int(logs_interval_min) * 60)
         self._fetch_outputs = fetch_outputs
         self.wireless_enabled = wireless_enabled
         self._reconnect_delay = max(1, int(reconnect_delay_s))
+
+        self._last_log_timestamp: int | None = None
 
         # Circuit breaker: Eskalationsstufe, falls der schnelle Reconnect
         # wiederholt fehlschlaegt (echter Geraeteausfall statt Einzelaussetzer)
@@ -134,6 +142,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             ("zones", self._fetch_zones, self._zones_interval),
             ("faults", self._fetch_faults, self._faults_interval),
             ("mode", self._fetch_mode, self._mode_interval),
+            ("logs", self._fetch_logs, self._logs_interval),
         ]
         if self.wireless_enabled:
             loops.append(("extensive", self._fetch_extensive, self._extensive_interval))
@@ -351,4 +360,43 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         # Zonen-Abfrage automatisch mit uebernommen (kein eigener Zonen-Request hier).
         self._wireless_cache = await self.api.get_wireless_zones_status()
         base = self._base_data()
+        self.async_set_updated_data(replace(base, available=True, last_error=None))
+
+    async def _fetch_logs(self) -> None:
+        # Liefert nur neue Eintraege seit dem letzten erfolgreich verarbeiteten
+        # Zeitstempel ("ge" = >=, daher +1 um den letzten Eintrag nicht erneut
+        # zu bekommen). Beim allerersten Aufruf (since=None) liefert die
+        # Firmware bis zu 600 Eintraege (komplette Logkapazitaet) - entsprechend
+        # langsamer, aber nur einmalig.
+        since = self._last_log_timestamp + 1 if self._last_log_timestamp is not None else None
+        entries = await self.api.get_logs(since=since)
+
+        newest_timestamp = self._last_log_timestamp
+        newest_user_entry: tuple[int, dict[str, Any], dict[str, Any]] | None = None
+        for entry in entries:
+            for event in entry.get("events", []):
+                try:
+                    ts = int(event.get("timestamp"))
+                except (TypeError, ValueError):
+                    continue
+                if newest_timestamp is None or ts > newest_timestamp:
+                    newest_timestamp = ts
+                if event.get("user") is None:
+                    continue
+                if newest_user_entry is None or ts >= newest_user_entry[0]:
+                    newest_user_entry = (ts, entry, event)
+
+        if newest_timestamp is not None:
+            self._last_log_timestamp = newest_timestamp
+
+        base = self._base_data()
+        if newest_user_entry is not None:
+            ts, entry, event = newest_user_entry
+            base = replace(
+                base,
+                last_log_user=str(event.get("user")),
+                last_log_username=event.get("username"),
+                last_log_action=entry.get("desc"),
+                last_log_timestamp=ts,
+            )
         self.async_set_updated_data(replace(base, available=True, last_error=None))

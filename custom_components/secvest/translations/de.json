@@ -42,6 +42,7 @@
           "mode_interval": "Alarmzustand-Intervall (Sek.)",
           "extensive_interval": "Umfangreiche Abfrage / RSSI (Min.)",
           "fetch_outputs": "Ausgänge im Zonen-Takt mitfragen",
+          "logs_interval": "Ereignisprotokoll / Benutzer-Zuordnung (Min.)",
           "reconnect_delay": "Wartezeit nach Verbindungsabbruch (Sek.)",
           "web_username": "Web-Benutzer / Code (nur RSSI)",
           "web_password": "Web-Passwort (nur RSSI)",

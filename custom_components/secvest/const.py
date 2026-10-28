@@ -14,6 +14,7 @@ CONF_FAULTS_INTERVAL = "faults_interval"        # Sekunden
 CONF_MODE_INTERVAL = "mode_interval"            # Sekunden (Alarmzustand)
 CONF_EXTENSIVE_INTERVAL = "extensive_interval"  # Minuten (Wireless/RSSI-Scrape)
 CONF_FETCH_OUTPUTS = "fetch_outputs"            # Ausgaenge im Zonen-Takt mitfragen
+CONF_LOGS_INTERVAL = "logs_interval"            # Minuten (Ereignisprotokoll, fuer Benutzer-Zuordnung)
 CONF_RECONNECT_DELAY = "reconnect_delay"        # Sekunden Wartezeit nach Verbindungsabbruch
 
 CONF_RETRIES = "retries"
@@ -28,6 +29,7 @@ DEFAULT_FAULTS_INTERVAL = 3       # Sekunden
 DEFAULT_MODE_INTERVAL = 5         # Sekunden
 DEFAULT_EXTENSIVE_INTERVAL = 5    # Minuten
 DEFAULT_FETCH_OUTPUTS = True
+DEFAULT_LOGS_INTERVAL = 5         # Minuten (/logs/ ist mit ~6s selbst recht langsam)
 DEFAULT_RECONNECT_DELAY = 10      # Sekunden, schneller Reconnect-Versuch
 DEFAULT_RETRIES = 4
 DEFAULT_BREAKER_THRESHOLD = 5      # nach 5 Fehlversuchen -> lange Pause
@@ -50,9 +52,11 @@ MODE_SET_ALARM = "set-alarm"
 MODE_PARTSET_ALARM = "partset-alarm"
 MODE_ACKNOWLEDGED = "acknowledged"
 
-# Nur diese drei sind gueltige Ziele fuer PUT /system/partitions-1/ bzw. den
-# Service secvest_set_mode - die Alarm-/Acknowledged-Rohwerte liefert die
-# Firmware nur, sie lassen sich nicht direkt anfordern.
+# Nur diese drei sind als Ziel fuer den Service secvest_set_mode vorgesehen.
+# Laut externer Reverse-Engineering-Doku (thomasdanz/secvest-api) sendet die
+# offizielle App auch "acknowledged" aktiv per PUT, um einen Alarm zu
+# quittieren - waere also technisch moeglich, ist hier aber (noch) bewusst
+# nicht freigegeben, da das eine neue, sicherheitsrelevante Faehigkeit ist.
 VALID_MODES = {MODE_SET, MODE_PARTSET, MODE_UNSET}
 
 # HA-AlarmControlPanelState-Werte als reine Strings, damit const.py auch ohne

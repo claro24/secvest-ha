@@ -23,13 +23,21 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.8
+
+Neuer Diagnose-Sensor "Secvest Letzter Benutzer": fragt zusätzlich den Endpoint `/logs/` ab (eigenes Intervall über die neue Option "Ereignisprotokoll / Benutzer-Zuordnung", Standard 5 Minuten; inkrementell per `$filter=timestamp ge <n>`, damit nicht jedes Mal das komplette Log mit bis zu 600 Einträgen geladen wird) und zeigt den Benutzer-Slot bzw. Benutzernamen des letzten protokollierten Vorgangs mit Benutzerbezug. Bestätigt mit echten Log-Beispielen funktioniert das für Scharf-/Unscharfschalten (z. B. `"Ben 001 TB 1 deaktiv"`). Ob auch das Quittieren eines Fehlers oder Alarms einen Benutzer ins Log schreibt, ist bisher **nicht** mit echten Daten belegt — das korrigiert die Aussage aus Version 0.3.7, dass eine Benutzer-Identifikation generell nicht möglich sei; sie war nur für die damals abgefragten Endpoints (`state`/`zones/`/`faults/`/`output/`) richtig.
+
+Zusätzlich beim Abgleich mit der externen Doku ([thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api)) gefunden und behoben: `set_mode()` prüfte bisher nicht, ob die Secvest den angeforderten Zustand tatsächlich übernommen hat. Bei einem von der Firmware stillschweigend ignorierten Wechsel (z. B. direkt von Teilscharf auf Scharf, ohne zuvor unscharf zu schalten) hätte HA das fälschlich als Erfolg gemeldet; jetzt wird der Soll-/Ist-Zustand verglichen und bei Abweichung ein Fehler ausgelöst.
+
+Das offizielle Secvest-App sendet laut derselben Doku `acknowledged` aktiv per PUT, um einen Alarm zu quittieren — technisch also anfragbar, hier aber bewusst (noch) nicht als sendbarer Befehl freigegeben, da das eine neue, sicherheitsrelevante Fähigkeit wäre.
+
 ## Neu in Version 0.3.7
 
 Neues Attribut `triggered_zone_names` am Alarm-Panel: zeigt, solange `alarm_memory` aktiv ist, die Namen der Zonen, für die gerade ein Fault vom Type `5000` mit `affects-zone` vorliegt (z. B. `["Wohnen-BM"]` oder `["Bad-Fenster"]`) — anhand von zwei echten Testalarmen (Bewegungsmelder und Fensterkontakt) gegen reale Log-Daten verifiziert.
 
 Fault-Type `5000` bedeutet laut externer Reverse-Engineering-Doku ([thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api), [ha-secvest Issue #95](https://github.com/thomasdanz/ha-secvest/issues/95)) generell "Zone offen, blockiert Scharfschalten" — nicht alarmspezifisch, aber stabil genug, um andere, unabhängige Fault-Typen (z. B. `1170` = Repeater-Batterie niedrig) zuverlässig auszuschließen. Ein-/Ausgangszonen erzeugen laut derselben Doku bewusst keinen solchen Fault, auch wenn sie kurz offen waren (bestätigt auch in unserem eigenen Test: die Eingangstür selbst erzeugte nie einen Fault).
 
-Eine Benutzer-Identifikation beim Quittieren eines Alarms ist mit den aktuell abgefragten Endpoints nicht möglich — keines der Felder in `state`/`zones/`/`faults/`/`output/` enthält eine Benutzerkennung, und auch im deutlich gründlicheren Fremd-Projekt gibt es dafür keinen bekannten Log-Eintrag.
+Eine Benutzer-Identifikation beim Quittieren eines Alarms war mit den damals abgefragten Endpoints nicht möglich — siehe Version 0.3.8 für die Erweiterung über `/logs/`.
 
 ## Neu in Version 0.3.5
 
@@ -278,13 +286,21 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - German and English interface
 - Diagnostic export for troubleshooting
 
+## New in Version 0.3.8
+
+New diagnostic sensor "Secvest Letzter Benutzer" (Last User): additionally polls the `/logs/` endpoint (own interval via the new "Event log / user attribution" option, default 5 minutes; fetched incrementally via `$filter=timestamp ge <n>` so the full log, up to 600 entries, isn't reloaded every time) and shows the user slot or username of the last logged action that carried a user identity. Confirmed with real log examples for arming/disarming (e.g. `"Ben 001 TB 1 deaktiv"`). Whether acknowledging a fault or an alarm also writes a user to the log is **not yet** confirmed with real data - this corrects the 0.3.7 statement that user identification wasn't possible in general; that was only true for the endpoints polled at the time (`state`/`zones/`/`faults/`/`output/`).
+
+Also found and fixed while cross-checking against the external docs ([thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api)): `set_mode()` never verified whether the Secvest actually applied the requested state. For a transition the firmware silently ignores (e.g. going straight from armed-home to armed-away without disarming first), HA would have falsely reported success; it now compares requested vs. actual state and raises an error on mismatch.
+
+The official Secvest app sends `acknowledged` via PUT to acknowledge an alarm, per the same docs - technically possible, but deliberately not (yet) exposed as a sendable command here, since that would be a new, security-relevant capability.
+
 ## New in Version 0.3.7
 
 New `triggered_zone_names` attribute on the alarm panel: while `alarm_memory` is active, lists the names of zones that currently have a fault of type `5000` with `affects-zone` set (e.g. `["Wohnen-BM"]` or `["Bad-Fenster"]`) - verified against real log data from two test alarms (motion detector and window contact).
 
 Fault type `5000` generally means "zone open, blocks arming" according to external reverse-engineering docs ([thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api), [ha-secvest issue #95](https://github.com/thomasdanz/ha-secvest/issues/95)) - not alarm-specific, but stable enough to reliably exclude unrelated fault types (e.g. `1170` = repeater battery low). Entry/exit zones deliberately never produce this fault according to the same docs, even if briefly open (also confirmed in our own test: the entry door itself never produced one).
 
-Identifying which user acknowledged an alarm is not possible with the endpoints currently polled - none of the fields in `state`/`zones/`/`faults/`/`output/` carry a user identity, and even the much more thorough third-party project has no known log entry for it either.
+Identifying which user acknowledged an alarm was not possible with the endpoints polled at the time - see version 0.3.8 for the `/logs/`-based extension.
 
 ## New in Version 0.3.5
 
