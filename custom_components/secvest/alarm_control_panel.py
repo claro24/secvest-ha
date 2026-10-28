@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import replace
 from typing import Any
 
 import aiohttp
@@ -110,6 +111,7 @@ class SecvestAlarm(AlarmControlPanelEntity):
             "raw_mode": raw_mode,
             "alarm_memory": alarm_memory,
             "triggered_zone_names": _triggered_zone_names(d) if alarm_memory and d else [],
+            "mode_change_history": d.mode_change_history if d else [],
         }
 
     # -----------------------
@@ -186,17 +188,12 @@ class SecvestAlarm(AlarmControlPanelEntity):
                 if open_names
                 else ""
             )
-            new_data = type(d)(
-                raw_mode=d.raw_mode,
-                human_mode=d.human_mode,
+            new_data = replace(
+                d,
                 zones=zones_dict,
-                faults=d.faults,
-                outputs=d.outputs,
                 open_zone_names=open_names,
                 open_zones_csv=open_csv,
                 open_zones_spoken=spoken,
-                available=d.available,
-                last_error=d.last_error,
             )
             self.coordinator.async_set_updated_data(new_data)
 
@@ -215,6 +212,14 @@ class SecvestAlarm(AlarmControlPanelEntity):
         try:
             await self.coordinator.api.set_mode(mode)
             await self.coordinator.async_request_refresh()
+
+            # Benutzer-Zuordnung ueber /logs/ im Hintergrund nachziehen, statt
+            # darauf zu warten - sonst wuerde jede Schaltung ueber die
+            # Alarmzentrale um bis zu ~4,5s (Wiederholungen) verzoegert.
+            self.hass.async_create_task(
+                self.coordinator.async_sync_logs_for_mode_change(),
+                "secvest_logs_sync",
+            )
 
         except asyncio.TimeoutError:
             raise HomeAssistantError("Secvest antwortet nicht (Timeout). Bitte erneut versuchen.")

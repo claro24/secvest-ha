@@ -23,6 +23,12 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.11
+
+Die Benutzer-Zuordnung über das Ereignisprotokoll funktioniert jetzt nachträglich und für jeden erkannten Scharf-/Unscharf-Wechsel, nicht mehr nur für über HA ausgelöste Schaltungen: Jeder Wechsel (egal ob über HA oder am Bedienteil ausgelöst) wird beim Erkennen in einer neuen Historie `mode_change_history` registriert, und sobald ein passender Log-Eintrag mit Benutzerbezug verfügbar ist - auch erst bei einem späteren planmäßigen Poll -, wird er nachträglich zugeordnet (zeitlich nächster noch nicht verwendeter Eintrag, max. 2 Minuten Abstand). Das neue Attribut `mode_change_history` am Alarm-Panel zeigt diese Historie (Zeitstempel, von/nach welchem Rohzustand, und sobald bekannt: Benutzer) direkt an der Entität, die den Zustand repräsentiert.
+
+Außerdem behoben: Beim Scharfschalten über die Alarmzentrale in HA (nicht über den Service) wurde bei der Live-Zonenprüfung versehentlich ein komplett neues `SecvestData`-Objekt ohne die Log-/Benutzer-Felder erzeugt - dadurch gingen `log_history`, `mode_change_history` und der letzte bekannte Benutzer bei jedem Scharfschalten verloren. Jetzt wird korrekt nur das Nötige aktualisiert, der Rest bleibt erhalten.
+
 ## Neu in Version 0.3.10
 
 Schaltet man Scharf/Unscharf über Home Assistant (Service `secvest_set_mode` bzw. die Alarmzentrale), wird jetzt zusätzlich direkt im Anschluss das Ereignisprotokoll abgefragt, statt bis zu 5 Minuten auf den nächsten planmäßigen `/logs/`-Poll zu warten (läuft im Hintergrund, verzögert die Schaltung selbst nicht). Mit kurzen Wiederholungen (bis zu 4× im Abstand von 1,5s), da die Firmware den Log-Eintrag nicht immer sofort bereitstellt.
@@ -299,6 +305,12 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.11
+
+User attribution via the event log now works retroactively and for every detected armed/disarmed transition, not just ones triggered through HA: every transition (whether triggered via HA or at the keypad) gets registered the moment it's detected, in a new `mode_change_history` record, and as soon as a matching log entry with a user shows up - even later, on a subsequent scheduled poll - it gets attached after the fact (nearest not-yet-used entry, within a 2-minute window). The new `mode_change_history` attribute on the alarm panel shows this history (timestamp, from/to raw state, and the user once known) right on the entity that represents the state.
+
+Also fixed: arming via the HA alarm panel (not the service) accidentally built a brand-new `SecvestData` object during the live zone check without the log/user fields, silently wiping `log_history`, `mode_change_history` and the last known user on every arm attempt. Now only what actually changed gets updated, everything else is preserved.
 
 ## New in Version 0.3.10
 

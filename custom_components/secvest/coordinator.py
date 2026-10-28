@@ -52,6 +52,7 @@ class SecvestData:
     last_log_action: str | None = None
     last_log_timestamp: int | None = None
     log_history: list[dict[str, Any]] = field(default_factory=list)
+    mode_change_history: list[dict[str, Any]] = field(default_factory=list)
 
 
 def make_spoken_zone_list(zones: list[str]) -> str:
@@ -81,6 +82,12 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
     _TIER_NAMES = ("zones", "faults", "mode", "extensive", "logs")
     _METRIC_WINDOW = 20
     _LOG_HISTORY_WINDOW = 20
+    _MODE_CHANGE_HISTORY_WINDOW = 20
+    # Kulanzfenster fuers nachtraegliche Zuordnen eines Log-Eintrags zu einem
+    # erkannten Mode-Wechsel - grosszuegig genug fuer Logging-Verzug/leichte
+    # Uhrzeitabweichung, aber eng genug, um zwei kurz aufeinanderfolgende,
+    # unabhaengige Wechsel i.d.R. nicht zu verwechseln.
+    _MODE_CHANGE_MATCH_WINDOW_S = 120
 
     def __init__(
         self,
@@ -117,6 +124,10 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         # den jeweils letzten zu ueberschreiben - damit bei zwei kurz
         # aufeinanderfolgenden Vorgaengen keiner verloren geht.
         self._log_history: deque[dict[str, Any]] = deque(maxlen=self._LOG_HISTORY_WINDOW)
+        # Jeder erkannte Mode-Wechsel (gleich welcher Quelle - HA oder
+        # Bedienteil), zunaechst ohne Benutzer; wird nachtraeglich mit einem
+        # Log-Eintrag abgeglichen, sobald einer verfuegbar ist.
+        self._mode_change_history: deque[dict[str, Any]] = deque(maxlen=self._MODE_CHANGE_HISTORY_WINDOW)
 
         # Circuit breaker: Eskalationsstufe, falls der schnelle Reconnect
         # wiederholt fehlschlaegt (echter Geraeteausfall statt Einzelaussetzer)
@@ -213,24 +224,48 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             return
         await self._run_once("extensive", self._fetch_extensive)
 
-    async def async_sync_logs_for_mode_change(self, request_ts: float) -> None:
-        """Fragt das Ereignisprotokoll nach einer ueber HA ausgeloesten Scharf-/
-        Unscharfschaltung zeitnah ab, statt auf den naechsten planmaessigen
-        Logs-Poll zu warten. Mit kurzen Wiederholungen, da die Firmware den
-        Log-Eintrag nicht immer sofort bereitstellt; akzeptiert wird dabei nur
-        ein Eintrag mit Zeitstempel >= request_ts - so wird bei zwei kurz
-        aufeinanderfolgenden Vorgaengen nicht versehentlich ein aelterer
-        Eintrag (von vor dieser Schaltung) zugeordnet. Ein wirklich zeitgleicher
-        zweiter Vorgang (z. B. parallel am Bedienteil) laesst sich ohne eigene
-        Vorgangs-ID in der Firmware nicht hundertprozentig trennen - beide
-        Eintraege landen aber unabhaengig davon vollstaendig in log_history."""
-        min_ts = int(request_ts)
+    async def async_sync_logs_for_mode_change(self) -> None:
+        """Fragt das Ereignisprotokoll nach einer Scharf-/Unscharfschaltung
+        zeitnah ab, statt auf den naechsten planmaessigen Logs-Poll zu warten.
+        Mit kurzen Wiederholungen, da die Firmware den Log-Eintrag nicht immer
+        sofort bereitstellt. Die eigentliche Zuordnung zum richtigen Wechsel
+        passiert unabhaengig davon in _try_match_pending_changes() - diese
+        Methode beschleunigt nur, wann sie zum ersten Mal versucht wird."""
         for attempt in range(4):
             if attempt:
                 await asyncio.sleep(1.5)
-            found = await self._run_once("logs", lambda: self._fetch_logs(min_timestamp=min_ts))
+            found = await self._run_once("logs", self._fetch_logs)
             if found:
                 return
+
+    def _try_match_pending_changes(self) -> None:
+        """Ordnet noch unbestaetigten Mode-Wechseln (_mode_change_history) den
+        zeitlich naechsten noch nicht verwendeten Log-Eintrag mit Benutzerbezug
+        zu (innerhalb von _MODE_CHANGE_MATCH_WINDOW_S). Laeuft nach jedem neu
+        erkannten Wechsel und nach jedem Logs-Poll - funktioniert dadurch
+        nachtraeglich fuer JEDEN erkannten Wechsel, unabhaengig davon, ob er
+        ueber HA oder am Bedienteil ausgeloest wurde, und auch dann noch, wenn
+        der passende Log-Eintrag erst bei einem spaeteren Poll eintrifft.
+        Jeder Log-Eintrag wird dabei nur einem Wechsel zugeordnet (consumed)."""
+        for change in self._mode_change_history:
+            if change["user"] is not None:
+                continue
+            best: dict[str, Any] | None = None
+            best_diff: float | None = None
+            for log_entry in self._log_history:
+                if log_entry["matched"]:
+                    continue
+                diff = abs(log_entry["timestamp"] - change["timestamp"])
+                if diff > self._MODE_CHANGE_MATCH_WINDOW_S:
+                    continue
+                if best_diff is None or diff < best_diff:
+                    best = log_entry
+                    best_diff = diff
+            if best is not None:
+                change["user"] = best["user"]
+                change["username"] = best["username"]
+                change["action"] = best["action"]
+                best["matched"] = True
 
     async def _run_once(self, name: str, fetch_fn: Callable[[], Awaitable[Any]]) -> Any:
         """Fuehrt einen einzelnen Abruf serialisiert ueber das gemeinsame Lock aus
@@ -434,8 +469,35 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         base = self._base_data()
         raw_mode = await self.api.get_mode()
         human_mode = STATE_TRANSLATIONS.get(raw_mode, "Unbekannt")
+
+        update_kwargs: dict[str, Any] = {}
+        # Jeder erkannte Wechsel wird registriert, gleich ob er ueber HA oder
+        # am Bedienteil ausgeloest wurde - die Benutzer-Zuordnung passiert
+        # nachtraeglich in _try_match_pending_changes(), sobald ein Log-Eintrag
+        # dazu verfuegbar ist (auch rueckwirkend bei einem spaeteren Poll).
+        if base.raw_mode is not None and base.raw_mode != raw_mode:
+            self._mode_change_history.append(
+                {
+                    "timestamp": time.time(),
+                    "from_mode": base.raw_mode,
+                    "to_mode": raw_mode,
+                    "user": None,
+                    "username": None,
+                    "action": None,
+                }
+            )
+            self._try_match_pending_changes()
+            update_kwargs["mode_change_history"] = list(self._mode_change_history)
+
         self.async_set_updated_data(
-            replace(base, raw_mode=raw_mode, human_mode=human_mode, available=True, last_error=None)
+            replace(
+                base,
+                raw_mode=raw_mode,
+                human_mode=human_mode,
+                available=True,
+                last_error=None,
+                **update_kwargs,
+            )
         )
 
     async def _fetch_extensive(self) -> None:
@@ -445,7 +507,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         base = self._base_data()
         self.async_set_updated_data(replace(base, available=True, last_error=None))
 
-    async def _fetch_logs(self, min_timestamp: int | None = None) -> bool:
+    async def _fetch_logs(self) -> bool:
         # Liefert nur neue Eintraege seit dem letzten erfolgreich verarbeiteten
         # Zeitstempel ("ge" = >=, daher +1 um den letzten Eintrag nicht erneut
         # zu bekommen). Beim allerersten Aufruf (since=None) liefert die
@@ -475,7 +537,6 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             self._last_log_timestamp = newest_timestamp
 
         new_user_entries.sort(key=lambda item: item[0])
-        found_matching = any(ts >= min_timestamp for ts, _, _ in new_user_entries) if min_timestamp is not None else bool(new_user_entries)
         for ts, entry, event in new_user_entries:
             self._log_history.append(
                 {
@@ -483,6 +544,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                     "user": str(event.get("user")),
                     "username": event.get("username"),
                     "action": entry.get("desc"),
+                    "matched": False,
                 }
             )
 
@@ -495,7 +557,12 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                 last_log_action=last["action"],
                 last_log_timestamp=last["timestamp"],
             )
+            # Neue Eintraege koennen zu laengst erkannten, noch unbestaetigten
+            # Mode-Wechseln gehoeren (auch ueber mehrere Logs-Polls hinweg
+            # nachtraeglich) - deshalb nach jedem Fetch neu versuchen.
+            self._try_match_pending_changes()
+            update_kwargs["mode_change_history"] = list(self._mode_change_history)
 
         base = self._base_data()
         self.async_set_updated_data(replace(base, available=True, last_error=None, **update_kwargs))
-        return found_matching
+        return bool(new_user_entries)

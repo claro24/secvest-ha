@@ -4,7 +4,6 @@ import asyncio
 from datetime import datetime
 import json
 import logging
-import time
 import aiohttp
 
 from homeassistant.config_entries import ConfigEntry
@@ -133,7 +132,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 or "Offene Zonen verhindern Aktivierung."
             )
 
-        request_ts = time.time()
         try:
             await api.set_mode(mode)
 
@@ -155,7 +153,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Service-Call darauf warten zu lassen - sonst wuerde jede Schaltung
         # um bis zu ~4,5s (Wiederholungen) verzoegert.
         hass.async_create_task(
-            coordinator.async_sync_logs_for_mode_change(request_ts),
+            coordinator.async_sync_logs_for_mode_change(),
             "secvest_logs_sync",
         )
 
