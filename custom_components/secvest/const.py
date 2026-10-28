@@ -84,10 +84,10 @@ ALARM_MEMORY_MODES = {
 
 STATE_TRANSLATIONS = {
     MODE_SET: "Scharf",
-    MODE_PARTSET: "Teilscharf",
+    MODE_PARTSET: "Scharf (intern)",
     MODE_UNSET: "Unscharf",
-    MODE_UNSET_ALARM: "Alarm",
+    MODE_UNSET_ALARM: "Eingangsweg verlassen",
     MODE_SET_ALARM: "Alarm",
-    MODE_PARTSET_ALARM: "Alarm (teilscharf)",
+    MODE_PARTSET_ALARM: "Alarm (intern)",
     MODE_ACKNOWLEDGED: "Alarmabbruch",
 }

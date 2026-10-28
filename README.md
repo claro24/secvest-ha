@@ -23,6 +23,16 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.5
+
+Anpassung der deutschen Beschriftungen auf dem "Secvest Mode (DE)"-Sensor, basierend auf zwei real ausgewerteten Testalarmen:
+
+- `unset-alarm`: "Alarm" → **"Eingangsweg verlassen"** — tritt auf, wenn man während der Eingangsverzögerung den vorgesehenen Eingangsweg verlässt (z. B. nicht direkt zum Bedienteil geht), statt erst beim Ablauf der Verzögerung
+- `partset`: "Teilscharf" → **"Scharf (intern)"**
+- `partset-alarm`: "Alarm (teilscharf)" → **"Alarm (intern)"**
+
+Die Zuordnung zu den Home-Assistant-Standardzuständen (`armed_home`/`triggered`/etc.) ist davon nicht betroffen, nur die deutsche Anzeige.
+
 ## Neu in Version 0.3.4
 
 - **Debug-Logging der Rohantworten:** Jede Antwort der Secvest (Zonen, Fehler, Alarmzustand, Ausgänge sowie alle Zwischenschritte der umfangreichen Web-Abfrage) wird jetzt bei aktiviertem Debug-Log für `custom_components.secvest.api` als vollständiger Rohtext mitprotokolliert. Aktivieren in der `configuration.yaml`:
@@ -259,6 +269,16 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.5
+
+German label adjustments on the "Secvest Mode (DE)" sensor, based on two real test alarms:
+
+- `unset-alarm`: "Alarm" → **"Eingangsweg verlassen"** (left the entry path) — occurs when you leave the designated entry route during the entry delay (e.g. don't head straight to the keypad), rather than only once the delay actually expires
+- `partset`: "Teilscharf" → **"Scharf (intern)"**
+- `partset-alarm`: "Alarm (teilscharf)" → **"Alarm (intern)"**
+
+The mapping to Home Assistant's standard states (`armed_home`/`triggered`/etc.) is unaffected - only the German display label changed.
 
 ## New in Version 0.3.4
 
