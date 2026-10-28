@@ -23,6 +23,17 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.4
+
+- **Debug-Logging der Rohantworten:** Jede Antwort der Secvest (Zonen, Fehler, Alarmzustand, Ausgänge sowie alle Zwischenschritte der umfangreichen Web-Abfrage) wird jetzt bei aktiviertem Debug-Log für `custom_components.secvest.api` als vollständiger Rohtext mitprotokolliert. Aktivieren in der `configuration.yaml`:
+  ```yaml
+  logger:
+    logs:
+      custom_components.secvest.api: debug
+  ```
+  Keine neue Integrations-Option nötig — rein über die Standard-HA-Log-Konfiguration (inkl. deren Rotation/Aufbewahrung) steuerbar.
+- Rohwert `unset-alarm` wird jetzt ebenfalls als `triggered`/"Alarm" behandelt (bisher `pending`/"Eingangsverzögerung") — entspricht der Beobachtung, dass dieser Wert bereits während eines laufenden Alarms auftritt.
+
 ## Neu in Version 0.3.3
 
 - **Warteschlange statt Versatz:** Der feste 1-Sekunden-Versatz aus 0.3.2 löste nur die ursprüngliche Kollision (Zonen/Fehler, gleiches Intervall), erzeugte aber durch unterschiedliche Intervalle (Alarmzustand = 5s) neue periodische Kollisionen (alle 15s). Jetzt wird eine Abfrage, die auf das gemeinsame Lock trifft, nicht mehr übersprungen, sondern wartet, bis die andere Ebene fertig ist — eine Aktualisierung kann sich dadurch kurz verzögern, geht aber nie mehr verloren. Der Versatz entfällt, da er dafür nicht mehr nötig ist.
@@ -46,7 +57,7 @@ Die Alarmzentrale bildet jetzt zusätzlich zu Scharf/Teilscharf/Unscharf auch Al
 | `unset` | `disarmed` | Unscharf |
 | `partset` | `armed_home` | Teilscharf |
 | `set` | `armed_away` | Scharf |
-| `unset-alarm` | `pending` | Eingangsverzögerung |
+| `unset-alarm` | `triggered` | Alarm |
 | `set-alarm` | `triggered` | Alarm |
 | `partset-alarm` | `triggered` | Alarm (teilscharf) |
 | `acknowledged` | `disarmed` | Alarmabbruch |
@@ -249,6 +260,17 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - German and English interface
 - Diagnostic export for troubleshooting
 
+## New in Version 0.3.4
+
+- **Raw response debug logging:** every Secvest response (zones, faults, alarm state, outputs, and every step of the extensive web poll) is now logged as full raw text when debug logging is enabled for `custom_components.secvest.api`. Enable it in `configuration.yaml`:
+  ```yaml
+  logger:
+    logs:
+      custom_components.secvest.api: debug
+  ```
+  No new integration option needed - controlled entirely through Home Assistant's standard logger config (including its own rotation/retention).
+- The `unset-alarm` raw value is now also treated as `triggered`/"Alarm" (previously `pending`/"Entry delay") - matches the observation that this value already occurs during an active alarm.
+
 ## New in Version 0.3.3
 
 - **Queue instead of stagger:** the fixed 1-second stagger from 0.3.2 only fixed the original collision (zones/faults, same interval), but created new periodic collisions (every 15s) because of the differing alarm-state interval (5s). A poll that now hits the shared lock no longer gets skipped - it waits until the other tier is done, so an update may be briefly delayed but is never lost anymore. The stagger is gone since it's no longer needed for that.
@@ -272,7 +294,7 @@ The alarm panel now also maps alarm and acknowledgement states, not just armed/d
 | `unset` | `disarmed` | Disarmed |
 | `partset` | `armed_home` | Armed home |
 | `set` | `armed_away` | Armed away |
-| `unset-alarm` | `pending` | Entry delay |
+| `unset-alarm` | `triggered` | Triggered |
 | `set-alarm` | `triggered` | Triggered |
 | `partset-alarm` | `triggered` | Triggered (armed home) |
 | `acknowledged` | `disarmed` | Alarm aborted |

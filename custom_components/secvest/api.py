@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import random
 import re
 from dataclasses import dataclass
@@ -11,6 +12,8 @@ from xml.etree import ElementTree
 from .const import DEFAULT_RETRIES
 
 import aiohttp
+
+_LOGGER = logging.getLogger(__name__)
 
 
 # Bei deiner Secvest besser großzügig sein:
@@ -83,6 +86,7 @@ class SecvestApi:
     async def _read_json(self, resp: aiohttp.ClientResponse) -> Any:
         # Robust: immer Text lesen und selbst JSON parsen
         text = (await resp.text()).strip()
+        _LOGGER.debug("Secvest raw response [%s %s]: %s", resp.status, resp.url, text)
         try:
             return json.loads(text)
         except json.JSONDecodeError as e:
@@ -250,6 +254,7 @@ class SecvestApi:
                         headers=headers or self._common_headers(),
                     ) as resp:
                         text = await resp.text()
+                        _LOGGER.debug("Secvest raw response [%s %s]: %s", resp.status, resp.url, text)
                         cookie_header = "; ".join(
                             f"{name}={cookie.value}" for name, cookie in resp.cookies.items()
                         )

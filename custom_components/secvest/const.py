@@ -60,7 +60,6 @@ VALID_MODES = {MODE_SET, MODE_PARTSET, MODE_UNSET}
 _HA_STATE_DISARMED = "disarmed"
 _HA_STATE_ARMED_HOME = "armed_home"
 _HA_STATE_ARMED_AWAY = "armed_away"
-_HA_STATE_PENDING = "pending"
 _HA_STATE_TRIGGERED = "triggered"
 
 # Rohzustand -> AlarmControlPanelState (als String-Wert, siehe oben)
@@ -68,7 +67,7 @@ RAW_TO_HA_STATE = {
     MODE_UNSET: _HA_STATE_DISARMED,
     MODE_PARTSET: _HA_STATE_ARMED_HOME,
     MODE_SET: _HA_STATE_ARMED_AWAY,
-    MODE_UNSET_ALARM: _HA_STATE_PENDING,
+    MODE_UNSET_ALARM: _HA_STATE_TRIGGERED,
     MODE_SET_ALARM: _HA_STATE_TRIGGERED,
     MODE_PARTSET_ALARM: _HA_STATE_TRIGGERED,
     MODE_ACKNOWLEDGED: _HA_STATE_DISARMED,
@@ -87,7 +86,7 @@ STATE_TRANSLATIONS = {
     MODE_SET: "Scharf",
     MODE_PARTSET: "Teilscharf",
     MODE_UNSET: "Unscharf",
-    MODE_UNSET_ALARM: "Eingangsverzögerung",
+    MODE_UNSET_ALARM: "Alarm",
     MODE_SET_ALARM: "Alarm",
     MODE_PARTSET_ALARM: "Alarm (teilscharf)",
     MODE_ACKNOWLEDGED: "Alarmabbruch",

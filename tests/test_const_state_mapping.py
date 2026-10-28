@@ -38,7 +38,7 @@ const = _load_const()
         (const.MODE_UNSET, "disarmed"),
         (const.MODE_PARTSET, "armed_home"),
         (const.MODE_SET, "armed_away"),
-        (const.MODE_UNSET_ALARM, "pending"),
+        (const.MODE_UNSET_ALARM, "triggered"),
         (const.MODE_SET_ALARM, "triggered"),
         (const.MODE_PARTSET_ALARM, "triggered"),
         (const.MODE_ACKNOWLEDGED, "disarmed"),
