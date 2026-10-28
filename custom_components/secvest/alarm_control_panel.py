@@ -31,6 +31,29 @@ async def async_setup_entry(
     async_add_entities([SecvestAlarm(coordinator, entry)], True)
 
 
+def _triggered_zone_names(data: Any) -> list[str]:
+    """Zonennamen, die laut aktueller Fault-Liste zum Alarm gehoeren.
+
+    Bewusst einfach gehalten: nimmt jeden Fault mit "affects-zone", ohne nach
+    Fault-Type zu filtern (dessen genaue Bedeutung ist noch nicht eindeutig
+    geklaert - siehe Diskussion). Nur relevant, waehrend alarm_memory aktiv
+    ist; kann faelschlich auch unabhaengige Faults (z.B. Batterie) auflisten,
+    wenn die zufaellig gleichzeitig anliegen.
+    """
+    names: list[str] = []
+    for fault in data.faults:
+        zone_id = str(fault.get("affects-zone") or "").strip()
+        if not zone_id:
+            continue
+        for zone in data.zones.values():
+            if str(zone.get("id") or "") == zone_id:
+                name = zone.get("name") or zone_id
+                if name not in names:
+                    names.append(name)
+                break
+    return names
+
+
 class SecvestAlarm(AlarmControlPanelEntity):
     """Alarm control panel for ABUS Secvest."""
 
@@ -71,10 +94,13 @@ class SecvestAlarm(AlarmControlPanelEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        raw_mode = self.coordinator.data.raw_mode if self.coordinator.data else None
+        d = self.coordinator.data
+        raw_mode = d.raw_mode if d else None
+        alarm_memory = raw_mode in ALARM_MEMORY_MODES if raw_mode else False
         return {
             "raw_mode": raw_mode,
-            "alarm_memory": raw_mode in ALARM_MEMORY_MODES if raw_mode else False,
+            "alarm_memory": alarm_memory,
+            "triggered_zone_names": _triggered_zone_names(d) if alarm_memory and d else [],
         }
 
     # -----------------------

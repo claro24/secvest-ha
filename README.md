@@ -23,6 +23,12 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.6
+
+Neues Attribut `triggered_zone_names` am Alarm-Panel: zeigt, solange `alarm_memory` aktiv ist, die Namen der Zonen, für die gerade ein Fault mit `affects-zone` vorliegt (z. B. `["Wohnen-BM"]` oder `["Bad-Fenster"]`) — anhand von zwei echten Testalarmen (Bewegungsmelder und Fensterkontakt) gegen reale Log-Daten verifiziert.
+
+**Bewusste Einschränkung:** Es wird nicht nach Fault-Type gefiltert, da dessen genaue Bedeutung noch nicht abschließend geklärt ist (Type "5000" tritt sowohl bei echten Alarmen als auch bei ganz gewöhnlicher Bewegung im unscharfen Zustand auf). Das Attribut kann daher theoretisch auch unabhängige, zufällig gleichzeitig anliegende Faults (z. B. Batterie) mit auflisten. Eine Benutzer-Identifikation beim Quittieren ist mit den aktuell abgefragten Endpoints nicht möglich — keines der Felder in `state`/`zones/`/`faults/`/`output/` enthält eine Benutzerkennung.
+
 ## Neu in Version 0.3.5
 
 Anpassung der deutschen Beschriftungen auf dem "Secvest Mode (DE)"-Sensor, basierend auf zwei real ausgewerteten Testalarmen:
@@ -269,6 +275,12 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.6
+
+New `triggered_zone_names` attribute on the alarm panel: while `alarm_memory` is active, lists the names of zones that currently have a fault with `affects-zone` set (e.g. `["Wohnen-BM"]` or `["Bad-Fenster"]`) - verified against real log data from two test alarms (motion detector and window contact).
+
+**Known limitation:** it does not filter by fault type, since that type's exact meaning isn't fully settled yet (type "5000" occurs both for real alarms and for ordinary motion while disarmed). The attribute can therefore in theory also list unrelated faults (e.g. low battery) that happen to be present at the same time. Identifying which user acknowledged an alarm is not possible with the endpoints currently polled - none of the fields in `state`/`zones/`/`faults/`/`output/` carry a user identity.
 
 ## New in Version 0.3.5
 
