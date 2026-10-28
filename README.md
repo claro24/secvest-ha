@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.12
+
+Der Log-Lesestand (zuletzt verarbeiteter Zeitstempel, plus `log_history` und `mode_change_history`) wird jetzt über HAs Storage-Mechanismus persistiert und beim Start der Integration wiederhergestellt. Dadurch wird das Ereignisprotokoll nach einem Neustart oder Reload immer lückenlos ab dem zuletzt in HA gespeicherten Eintrag weitergelesen, statt bei jedem Start erneut ohne Filter die letzten bis zu 600 Einträge abzufragen (langsamer) bzw. dazwischen liegende Einträge zu verpassen, falls in der Zwischenzeit mehr als 600 Einträge angefallen sind.
+
 ## Neu in Version 0.3.11
 
 Die Benutzer-Zuordnung über das Ereignisprotokoll funktioniert jetzt nachträglich und für jeden erkannten Scharf-/Unscharf-Wechsel, nicht mehr nur für über HA ausgelöste Schaltungen: Jeder Wechsel (egal ob über HA oder am Bedienteil ausgelöst) wird beim Erkennen in einer neuen Historie `mode_change_history` registriert, und sobald ein passender Log-Eintrag mit Benutzerbezug verfügbar ist - auch erst bei einem späteren planmäßigen Poll -, wird er nachträglich zugeordnet (zeitlich nächster noch nicht verwendeter Eintrag, max. 2 Minuten Abstand). Das neue Attribut `mode_change_history` am Alarm-Panel zeigt diese Historie (Zeitstempel, von/nach welchem Rohzustand, und sobald bekannt: Benutzer) direkt an der Entität, die den Zustand repräsentiert.
@@ -305,6 +309,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.12
+
+The log read position (last processed timestamp, plus `log_history` and `mode_change_history`) is now persisted via HA's storage mechanism and restored on integration startup. This means the event log is always read on without a gap from the last entry saved in HA after a restart or reload, instead of re-fetching the last up to 600 entries without a filter every time (slower) or missing entries in between if more than 600 accumulated in the meantime.
 
 ## New in Version 0.3.11
 

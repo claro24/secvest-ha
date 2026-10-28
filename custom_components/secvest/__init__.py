@@ -91,6 +91,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = SecvestCoordinator(
         hass=hass,
         api=api,
+        entry_id=entry.entry_id,
         zones_interval_s=zones_interval,
         faults_interval_s=faults_interval,
         mode_interval_s=mode_interval,
@@ -103,6 +104,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         breaker_cooldown=breaker_cooldown,
         zone_name_map=options.get("zone_name_map", {}),
     )
+    # Letzten gelesenen Log-Zeitstempel (und die Historien) aus dem letzten HA-
+    # Lauf wiederherstellen, damit nach einem Neustart/Reload luecklos ab dort
+    # weitergelesen wird, statt erneut die kompletten letzten 600 Eintraege
+    # abzufragen bzw. dazwischen liegende Eintraege zu verpassen.
+    await coordinator.async_load_log_state()
 
     # --- Store runtime objects ---
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = {

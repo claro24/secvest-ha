@@ -10,6 +10,7 @@ from datetime import timedelta
 from typing import Any, Awaitable, Callable
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -88,12 +89,14 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
     # Uhrzeitabweichung, aber eng genug, um zwei kurz aufeinanderfolgende,
     # unabhaengige Wechsel i.d.R. nicht zu verwechseln.
     _MODE_CHANGE_MATCH_WINDOW_S = 120
+    _STORAGE_VERSION = 1
 
     def __init__(
         self,
         hass: HomeAssistant,
         api: SecvestApi,
         *,
+        entry_id: str,
         zones_interval_s: int,
         faults_interval_s: int,
         mode_interval_s: int,
@@ -128,6 +131,10 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         # Bedienteil), zunaechst ohne Benutzer; wird nachtraeglich mit einem
         # Log-Eintrag abgeglichen, sobald einer verfuegbar ist.
         self._mode_change_history: deque[dict[str, Any]] = deque(maxlen=self._MODE_CHANGE_HISTORY_WINDOW)
+        # Persistiert den Log-Lesestand ueber Neustarts/Reloads hinweg, damit
+        # immer luecklos ab dem letzten in HA gespeicherten Eintrag
+        # weitergelesen wird (siehe async_load_log_state()).
+        self._log_store = Store(hass, self._STORAGE_VERSION, f"secvest_logs_{entry_id}")
 
         # Circuit breaker: Eskalationsstufe, falls der schnelle Reconnect
         # wiederholt fehlschlaegt (echter Geraeteausfall statt Einzelaussetzer)
@@ -153,6 +160,31 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
     # -------------------------
     # Lifecycle
     # -------------------------
+
+    async def async_load_log_state(self) -> None:
+        """Stellt den Log-Lesestand (Zeitstempel + Historien) aus dem letzten
+        HA-Lauf wieder her. Vor async_start() aufrufen, damit der erste
+        Logs-Poll bereits luecklos ab dem letzten gespeicherten Eintrag
+        weiterliest, statt erneut ohne "since"-Filter die letzten bis zu 600
+        Eintraege zu holen (bzw. dazwischen liegende zu verpassen, falls in
+        der Zeit mehr als 600 Eintraege angefallen sind)."""
+        data = await self._log_store.async_load()
+        if not data:
+            return
+        self._last_log_timestamp = data.get("last_log_timestamp")
+        for item in data.get("log_history") or []:
+            self._log_history.append(item)
+        for item in data.get("mode_change_history") or []:
+            self._mode_change_history.append(item)
+
+    async def _async_save_log_state(self) -> None:
+        await self._log_store.async_save(
+            {
+                "last_log_timestamp": self._last_log_timestamp,
+                "log_history": list(self._log_history),
+                "mode_change_history": list(self._mode_change_history),
+            }
+        )
 
     def async_start(self) -> None:
         """Startet die unabhaengigen Poll-Loops. Die umfangreiche Abfrage laeuft
@@ -488,6 +520,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             )
             self._try_match_pending_changes()
             update_kwargs["mode_change_history"] = list(self._mode_change_history)
+            await self._async_save_log_state()
 
         self.async_set_updated_data(
             replace(
@@ -513,10 +546,11 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         # zu bekommen). Beim allerersten Aufruf (since=None) liefert die
         # Firmware bis zu 600 Eintraege (komplette Logkapazitaet) - entsprechend
         # langsamer, aber nur einmalig.
-        since = self._last_log_timestamp + 1 if self._last_log_timestamp is not None else None
+        previous_last_log_timestamp = self._last_log_timestamp
+        since = previous_last_log_timestamp + 1 if previous_last_log_timestamp is not None else None
         entries = await self.api.get_logs(since=since)
 
-        newest_timestamp = self._last_log_timestamp
+        newest_timestamp = previous_last_log_timestamp
         # Jeder neue Eintrag mit Benutzerbezug wird an die Historie angehaengt
         # (nicht nur der letzte ueberschrieben) - bei zwei kurz
         # aufeinanderfolgenden Vorgaengen geht so keiner verloren.
@@ -562,6 +596,12 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             # nachtraeglich) - deshalb nach jedem Fetch neu versuchen.
             self._try_match_pending_changes()
             update_kwargs["mode_change_history"] = list(self._mode_change_history)
+
+        # Lesestand immer persistieren, wenn er sich bewegt hat (auch ohne
+        # neue Benutzer-Eintraege) - so wird nach einem Neustart/Reload immer
+        # luecklos ab dem zuletzt in HA gespeicherten Eintrag weitergelesen.
+        if self._last_log_timestamp != previous_last_log_timestamp:
+            await self._async_save_log_state()
 
         base = self._base_data()
         self.async_set_updated_data(replace(base, available=True, last_error=None, **update_kwargs))
