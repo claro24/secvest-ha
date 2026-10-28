@@ -227,7 +227,12 @@ class SecvestLastLogUserSensor(SecvestBaseEntity, SensorEntity):
     ausgeloest hat - bestaetigt z.B. fuer Scharf-/Unscharfschalten, generisch
     fuer jede Log-Zeile mit Benutzerbezug (auch Web-Login, Einstellungen
     geaendert etc.). Fuer das Quittieren eines Alarms ist noch kein echtes
-    Beispiel bekannt; mit realen Logdaten ggf. nachschaerfen."""
+    Beispiel bekannt; mit realen Logdaten ggf. nachschaerfen.
+
+    Das Attribut "history" enthaelt zusaetzlich die letzten bis zu 20
+    Log-Eintraege mit Benutzerbezug (nicht nur den jeweils letzten) - falls
+    zwei Vorgaenge kurz aufeinander folgen, bevor dieser Sensor aktualisiert
+    wird, geht so keiner verloren."""
 
     _attr_name = "Secvest Letzter Benutzer"
     _attr_icon = "mdi:account-clock"
@@ -254,4 +259,5 @@ class SecvestLastLogUserSensor(SecvestBaseEntity, SensorEntity):
             "username": d.last_log_username,
             "action": d.last_log_action,
             "timestamp": d.last_log_timestamp,
+            "history": d.log_history,
         }

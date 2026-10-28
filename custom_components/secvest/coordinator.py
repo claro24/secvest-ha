@@ -5,7 +5,7 @@ import logging
 import re
 import time
 from collections import deque
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from typing import Any, Awaitable, Callable
 
@@ -51,6 +51,7 @@ class SecvestData:
     last_log_username: str | None = None
     last_log_action: str | None = None
     last_log_timestamp: int | None = None
+    log_history: list[dict[str, Any]] = field(default_factory=list)
 
 
 def make_spoken_zone_list(zones: list[str]) -> str:
@@ -79,6 +80,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
 
     _TIER_NAMES = ("zones", "faults", "mode", "extensive", "logs")
     _METRIC_WINDOW = 20
+    _LOG_HISTORY_WINDOW = 20
 
     def __init__(
         self,
@@ -111,6 +113,10 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         self._reconnect_delay = max(1, int(reconnect_delay_s))
 
         self._last_log_timestamp: int | None = None
+        # Behaelt jeden neu gesehenen Log-Eintrag mit Benutzerbezug, statt nur
+        # den jeweils letzten zu ueberschreiben - damit bei zwei kurz
+        # aufeinanderfolgenden Vorgaengen keiner verloren geht.
+        self._log_history: deque[dict[str, Any]] = deque(maxlen=self._LOG_HISTORY_WINDOW)
 
         # Circuit breaker: Eskalationsstufe, falls der schnelle Reconnect
         # wiederholt fehlschlaegt (echter Geraeteausfall statt Einzelaussetzer)
@@ -207,13 +213,34 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             return
         await self._run_once("extensive", self._fetch_extensive)
 
-    async def _run_once(self, name: str, fetch_fn: Callable[[], Awaitable[None]]) -> None:
+    async def async_sync_logs_for_mode_change(self, request_ts: float) -> None:
+        """Fragt das Ereignisprotokoll nach einer ueber HA ausgeloesten Scharf-/
+        Unscharfschaltung zeitnah ab, statt auf den naechsten planmaessigen
+        Logs-Poll zu warten. Mit kurzen Wiederholungen, da die Firmware den
+        Log-Eintrag nicht immer sofort bereitstellt; akzeptiert wird dabei nur
+        ein Eintrag mit Zeitstempel >= request_ts - so wird bei zwei kurz
+        aufeinanderfolgenden Vorgaengen nicht versehentlich ein aelterer
+        Eintrag (von vor dieser Schaltung) zugeordnet. Ein wirklich zeitgleicher
+        zweiter Vorgang (z. B. parallel am Bedienteil) laesst sich ohne eigene
+        Vorgangs-ID in der Firmware nicht hundertprozentig trennen - beide
+        Eintraege landen aber unabhaengig davon vollstaendig in log_history."""
+        min_ts = int(request_ts)
+        for attempt in range(4):
+            if attempt:
+                await asyncio.sleep(1.5)
+            found = await self._run_once("logs", lambda: self._fetch_logs(min_timestamp=min_ts))
+            if found:
+                return
+
+    async def _run_once(self, name: str, fetch_fn: Callable[[], Awaitable[Any]]) -> Any:
         """Fuehrt einen einzelnen Abruf serialisiert ueber das gemeinsame Lock aus
         und pflegt Fehlerzaehler/Diagnose-Kennzahlen - gemeinsam genutzt von den
-        Intervall-Loops, dem naechtlichen Zeitplan und dem manuellen Trigger."""
+        Intervall-Loops, dem naechtlichen Zeitplan und dem manuellen Trigger.
+        Gibt den Rueckgabewert von fetch_fn weiter (z. B. fuer die Logs-
+        Zuordnung nach einer Schaltung), sonst None."""
         now = time.time()
         if now < self._breaker_until:
-            return
+            return None
 
         # Ist das Lock gerade belegt, wartet dieser Aufruf hier - keine eigene
         # Warteschlange noetig, da jede Ebene ohnehin nur eine Schleife ist und
@@ -224,20 +251,21 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
 
             start = time.monotonic()
             try:
-                await fetch_fn()
+                result = await fetch_fn()
             except (asyncio.TimeoutError, SecvestApiError) as err:
                 self._handle_failure(name, err)
-                return
+                return None
             except Exception as err:  # unerwarteter Fehler: nicht die Loop sterben lassen
                 _LOGGER.exception("Secvest %s-Abfrage fehlgeschlagen (unerwartet)", name)
                 self._handle_failure(name, err)
-                return
+                return None
 
             self._response_times[name].append(time.monotonic() - start)
 
         self._consecutive_failures = 0
         self._breaker_until = 0.0
         self._last_error = None
+        return result
 
     @staticmethod
     def _validate_time_str(time_str: str) -> str:
@@ -417,7 +445,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         base = self._base_data()
         self.async_set_updated_data(replace(base, available=True, last_error=None))
 
-    async def _fetch_logs(self) -> None:
+    async def _fetch_logs(self, min_timestamp: int | None = None) -> bool:
         # Liefert nur neue Eintraege seit dem letzten erfolgreich verarbeiteten
         # Zeitstempel ("ge" = >=, daher +1 um den letzten Eintrag nicht erneut
         # zu bekommen). Beim allerersten Aufruf (since=None) liefert die
@@ -427,7 +455,10 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         entries = await self.api.get_logs(since=since)
 
         newest_timestamp = self._last_log_timestamp
-        newest_user_entry: tuple[int, dict[str, Any], dict[str, Any]] | None = None
+        # Jeder neue Eintrag mit Benutzerbezug wird an die Historie angehaengt
+        # (nicht nur der letzte ueberschrieben) - bei zwei kurz
+        # aufeinanderfolgenden Vorgaengen geht so keiner verloren.
+        new_user_entries: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
         for entry in entries:
             for event in entry.get("events", []):
                 try:
@@ -438,20 +469,33 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                     newest_timestamp = ts
                 if event.get("user") is None:
                     continue
-                if newest_user_entry is None or ts >= newest_user_entry[0]:
-                    newest_user_entry = (ts, entry, event)
+                new_user_entries.append((ts, entry, event))
 
         if newest_timestamp is not None:
             self._last_log_timestamp = newest_timestamp
 
-        base = self._base_data()
-        if newest_user_entry is not None:
-            ts, entry, event = newest_user_entry
-            base = replace(
-                base,
-                last_log_user=str(event.get("user")),
-                last_log_username=event.get("username"),
-                last_log_action=entry.get("desc"),
-                last_log_timestamp=ts,
+        new_user_entries.sort(key=lambda item: item[0])
+        found_matching = any(ts >= min_timestamp for ts, _, _ in new_user_entries) if min_timestamp is not None else bool(new_user_entries)
+        for ts, entry, event in new_user_entries:
+            self._log_history.append(
+                {
+                    "timestamp": ts,
+                    "user": str(event.get("user")),
+                    "username": event.get("username"),
+                    "action": entry.get("desc"),
+                }
             )
-        self.async_set_updated_data(replace(base, available=True, last_error=None))
+
+        update_kwargs: dict[str, Any] = {"log_history": list(self._log_history)}
+        if new_user_entries:
+            last = self._log_history[-1]
+            update_kwargs.update(
+                last_log_user=last["user"],
+                last_log_username=last["username"],
+                last_log_action=last["action"],
+                last_log_timestamp=last["timestamp"],
+            )
+
+        base = self._base_data()
+        self.async_set_updated_data(replace(base, available=True, last_error=None, **update_kwargs))
+        return found_matching

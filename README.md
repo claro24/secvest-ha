@@ -23,6 +23,14 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.10
+
+Schaltet man Scharf/Unscharf über Home Assistant (Service `secvest_set_mode` bzw. die Alarmzentrale), wird jetzt zusätzlich direkt im Anschluss das Ereignisprotokoll abgefragt, statt bis zu 5 Minuten auf den nächsten planmäßigen `/logs/`-Poll zu warten (läuft im Hintergrund, verzögert die Schaltung selbst nicht). Mit kurzen Wiederholungen (bis zu 4× im Abstand von 1,5s), da die Firmware den Log-Eintrag nicht immer sofort bereitstellt.
+
+Damit bei zwei kurz aufeinanderfolgenden Vorgängen (z. B. HA-Schaltung und fast gleichzeitig jemand am Bedienteil) nicht versehentlich ein älterer, nicht zugehöriger Eintrag zugeordnet wird, wird nur ein Log-Eintrag mit Zeitstempel ab dem Moment der Schaltung akzeptiert. Außerdem merkt sich der Sensor "Secvest Letzter Benutzer" jetzt die letzten bis zu 20 Log-Einträge mit Benutzerbezug als Attribut `history`, statt nur den jeweils letzten zu überschreiben - so geht bei schnell aufeinanderfolgenden Vorgängen keine Zuordnung mehr verloren.
+
+Ein wirklich zeitgleicher zweiter Vorgang (z. B. exakt im selben Moment am Bedienteil) lässt sich ohne eigene Vorgangs-ID in der Secvest-Firmware nicht hundertprozentig trennen - beide Einträge landen aber unabhängig davon vollständig in der Historie.
+
 ## Neu in Version 0.3.9
 
 Die umfangreiche Wireless-Abfrage (RSSI, Batterie, Sabotage, Supervision je Funkmelder) läuft nicht mehr im festen Minuten-Intervall, sondern nur noch **einmal täglich zu einer frei konfigurierbaren Uhrzeit** (Option "Umfangreiche Abfrage / RSSI, Uhrzeit", Standard 03:00) sowie zusätzlich jederzeit über den neuen Button "Secvest RSSI/Wireless jetzt abfragen". Hintergrund: Anders als Zonen/Fehler/Alarmzustand ist das kein leichtgewichtiger REST-Call, sondern ein kompletter Web-UI-Login-Scrape (CSRF-Token, Session, Formular-Parsen) - und RSSI/Batterie ändern sich ohnehin zu träge, um das öfter als täglich zu rechtfertigen. Das schont die Anlage deutlich, ohne bei Bedarf (z. B. nach Einbau eines neuen Funkmelders) auf den nächsten Tag warten zu müssen.
@@ -291,6 +299,14 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.10
+
+Switching armed/disarmed via Home Assistant (the `secvest_set_mode` service, or the alarm panel) now also queries the event log right afterward, instead of waiting up to 5 minutes for the next scheduled `/logs/` poll (runs in the background, doesn't delay the switch itself). With a few short retries (up to 4x, 1.5s apart), since the firmware doesn't always make the log entry available immediately.
+
+To avoid misattributing an older, unrelated entry when two actions happen close together (e.g. an HA switch and someone at the keypad almost simultaneously), only a log entry with a timestamp at or after the moment of the switch is accepted. The "Secvest Letzter Benutzer" sensor also now keeps the last up to 20 user-tagged log entries as a `history` attribute, instead of overwriting just the latest one - so no attribution gets lost when actions happen in quick succession.
+
+A genuinely simultaneous second action (e.g. at the exact same moment at the keypad) can't be told apart with full certainty without the Secvest firmware providing its own transaction ID - but both entries still end up fully in the history regardless.
 
 ## New in Version 0.3.9
 
