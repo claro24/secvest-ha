@@ -146,6 +146,13 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
 
         self._wireless_cache: dict[int, dict[str, Any]] = {}
         self._request_lock = asyncio.Lock()
+        # Waehrend eine dringende Logs-Abfrage nach einer Schaltung aktiv ist
+        # (siehe async_sync_logs_for_mode_change()), pausieren normale Polls
+        # kurz vor dem Erwerb des Locks, statt sich mit in dessen Warteschlange
+        # einzureihen - damit die Logs-Abfrage nicht hinter mehreren Zonen-/
+        # Fehler-Zyklen anstehen muss, ohne das gemeinsame Lock selbst ersetzen
+        # zu muessen.
+        self._priority_pending = 0
         self._tasks: list[asyncio.Task[None]] = []
 
         # Diagnose: gleitende Antwortzeit und Wartezeit auf das Lock
@@ -270,7 +277,11 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         for attempt in range(attempts):
             if attempt:
                 await asyncio.sleep(2.0)
-            found = await self._run_once("logs", self._fetch_logs)
+            self._priority_pending += 1
+            try:
+                found = await self._run_once("logs", self._fetch_logs, priority=True)
+            finally:
+                self._priority_pending -= 1
             _LOGGER.debug(
                 "Secvest: logs-sync Versuch %s/%s, neuer Benutzer-Eintrag gefunden=%s",
                 attempt + 1,
@@ -325,15 +336,26 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                     best_diff,
                 )
 
-    async def _run_once(self, name: str, fetch_fn: Callable[[], Awaitable[Any]]) -> Any:
+    async def _run_once(
+        self, name: str, fetch_fn: Callable[[], Awaitable[Any]], *, priority: bool = False
+    ) -> Any:
         """Fuehrt einen einzelnen Abruf serialisiert ueber das gemeinsame Lock aus
         und pflegt Fehlerzaehler/Diagnose-Kennzahlen - gemeinsam genutzt von den
         Intervall-Loops, dem naechtlichen Zeitplan und dem manuellen Trigger.
         Gibt den Rueckgabewert von fetch_fn weiter (z. B. fuer die Logs-
-        Zuordnung nach einer Schaltung), sonst None."""
+        Zuordnung nach einer Schaltung), sonst None.
+
+        Nicht-dringende Aufrufe warten hier kurz, waehrend eine dringende
+        Logs-Abfrage aktiv ist (siehe async_sync_logs_for_mode_change()),
+        statt sich mit in die Lock-Warteschlange einzureihen - so muss die
+        dringende Abfrage nicht hinter mehreren Zonen-/Fehler-Zyklen anstehen."""
         now = time.time()
         if now < self._breaker_until:
             return None
+
+        if not priority:
+            while self._priority_pending > 0:
+                await asyncio.sleep(0.2)
 
         # Ist das Lock gerade belegt, wartet dieser Aufruf hier - keine eigene
         # Warteschlange noetig, da jede Ebene ohnehin nur eine Schleife ist und

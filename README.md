@@ -23,6 +23,12 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.14
+
+Reale Testdaten (echtes Debug-Log) haben den eigentlichen Grund für verzögerte/fehlende Benutzer-Zuordnung nach einer Schaltung gefunden: Der sofortige `/logs/`-Abgleich lief korrekt, musste aber hinter den laufenden Zonen-/Fehler-/Modus-Polls auf das gemeinsame Lock warten (im Test ca. 9s) - länger, als das vorherige Retry-Fenster abgedeckt hat. Statt einfach länger zu warten, bekommt die dringende Logs-Abfrage jetzt Vorrang: Normale Polls pausieren kurz, solange eine solche Abfrage aktiv ist, statt sich mit in die Warteschlange des Locks einzureihen - dadurch kommt sie in der Regel durch, sobald der gerade laufende Request fertig ist, statt hinter mehreren weiteren Zyklen anzustehen.
+
+Außerdem zur Klarstellung (kein Code-Fix, sondern eine Grenze der Architektur): Für Schaltungen über Home Assistant zeigt die Benutzer-Zuordnung aus dem Secvest-eigenen Ereignisprotokoll immer den für die Integration konfigurierten API-Benutzer (z. B. "HA_sys"), nicht die einzelne Person, die in der HA-Oberfläche geklickt hat - die Secvest selbst sieht nur den einen verwendeten Zugangscode. Nur Schaltungen direkt am Bedienteil mit unterschiedlichen PINs zeigen unterschiedliche Benutzer.
+
 ## Neu in Version 0.3.13
 
 Diagnose-Logging ergänzt, um ein gemeldetes Problem einzukreisen: Scharf-/Unscharfschalten über Home Assistant zeigte keine Benutzer-Zuordnung an, unklar ob der sofortige `/logs/`-Abgleich dabei überhaupt ausgelöst wurde. Neue Debug-Logzeilen (`custom_components.secvest` auf Debug stellen) markieren jetzt jeden Schritt: Planung des Hintergrund-Abgleichs, erkannter Mode-Wechsel, jede `/logs/`-Abfrage mit Trefferzahl, jeden Zuordnungsversuch und das Ergebnis. Das Wiederholungsfenster für den sofortigen Abgleich nach einer Schaltung wurde außerdem von ~4,5s auf ~14s verlängert (8 Versuche, 2s Abstand), falls die Firmware den Log-Eintrag langsamer bereitstellt als ursprünglich angenommen. Kein Verhaltens-Fix, sondern eine Grundlage, um die eigentliche Ursache beim nächsten Test anhand der Logzeilen zu bestimmen.
@@ -313,6 +319,12 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.14
+
+Real test data (an actual debug log) found the real reason for delayed/missing user attribution after a switch: the immediate `/logs/` sync ran correctly, but had to wait behind the running zones/faults/mode polls for the shared lock (about 9s in the test) - longer than the previous retry window covered. Instead of simply waiting longer, the urgent logs query now gets priority: normal polls pause briefly while such a query is active instead of joining the lock's queue - so it typically gets through as soon as the currently running request finishes, rather than waiting behind several more cycles.
+
+Also for clarity (not a code fix, but an architectural limit): for switches made through Home Assistant, the user attribution from Secvest's own event log always shows the API account configured for the integration (e.g. "HA_sys"), not the individual person who clicked it in the HA UI - the Secvest itself only ever sees the one access code used. Only switches made directly at the keypad with different PINs show different users.
 
 ## New in Version 0.3.13
 
