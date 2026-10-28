@@ -2,16 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from collections import deque
 from dataclasses import dataclass, replace
+from datetime import timedelta
 from typing import Any, Awaitable, Callable
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
 from .api import SecvestApi, SecvestApiError
-from .const import STATE_TRANSLATIONS
+from .const import DEFAULT_EXTENSIVE_TIME, STATE_TRANSLATIONS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,13 +67,15 @@ def make_spoken_zone_list(zones: list[str]) -> str:
 
 
 class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
-    """Haelt eine dauerhafte Verbindung offen und pollt vier unabhaengige,
-    getrennt konfigurierbare Ebenen (Zonen, Fehler, Alarmzustand, umfangreiche
-    Wireless-Abfrage). Ein gemeinsames Lock serialisiert alle Anfragen: ist
-    das Geraet gerade mit einer anderen Ebene beschaeftigt, wartet der naechste
-    Tick auf das Lock (Warteschlange der Tiefe 1 pro Ebene, da jede Ebene ihre
-    eigene sequentielle Schleife ist) statt verworfen zu werden - eine
-    Aktualisierung kann sich dadurch verzoegern, geht aber nie verloren."""
+    """Haelt eine dauerhafte Verbindung offen und pollt mehrere unabhaengige,
+    getrennt konfigurierbare Ebenen (Zonen, Fehler, Alarmzustand, Ereignis-
+    protokoll - je im festen Intervall; die umfangreiche Wireless-Abfrage nur
+    einmal taeglich zu einer konfigurierbaren Uhrzeit oder manuell per Button).
+    Ein gemeinsames Lock serialisiert alle Anfragen: ist das Geraet gerade mit
+    einer anderen Ebene beschaeftigt, wartet der naechste Tick auf das Lock
+    (Warteschlange der Tiefe 1 pro Ebene, da jede Ebene ihre eigene sequentielle
+    Schleife ist) statt verworfen zu werden - eine Aktualisierung kann sich
+    dadurch verzoegern, geht aber nie verloren."""
 
     _TIER_NAMES = ("zones", "faults", "mode", "extensive", "logs")
     _METRIC_WINDOW = 20
@@ -83,7 +88,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         zones_interval_s: int,
         faults_interval_s: int,
         mode_interval_s: int,
-        extensive_interval_min: int,
+        extensive_time: str,
         logs_interval_min: int,
         fetch_outputs: bool,
         wireless_enabled: bool,
@@ -99,7 +104,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         self._zones_interval = max(1, int(zones_interval_s))
         self._faults_interval = max(1, int(faults_interval_s))
         self._mode_interval = max(1, int(mode_interval_s))
-        self._extensive_interval = max(60, int(extensive_interval_min) * 60)
+        self._extensive_time = self._validate_time_str(extensive_time)
         self._logs_interval = max(60, int(logs_interval_min) * 60)
         self._fetch_outputs = fetch_outputs
         self.wireless_enabled = wireless_enabled
@@ -134,8 +139,11 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
 
     def async_start(self) -> None:
         """Startet die unabhaengigen Poll-Loops. Die umfangreiche Abfrage laeuft
-        nur, wenn Web-Credentials fuer RSSI/Wireless konfiguriert sind - ohne
-        sie wuerde sie ohnehin nur alle paar Minuten ins Leere laufen."""
+        nur, wenn Web-Credentials fuer RSSI/Wireless konfiguriert sind, und dann
+        nur einmal taeglich zur konfigurierten Uhrzeit statt im festen Intervall
+        - sie ist ein kompletter Web-UI-Login-Scrape und damit fuer die Anlage
+        deutlich teurer als die uebrigen, leichtgewichtigen REST-Abfragen.
+        RSSI/Batterie aendern sich ausserdem zu traege, um das zu rechtfertigen."""
         if self._tasks:
             return
         loops: list[tuple[str, Callable[[], Awaitable[None]], float]] = [
@@ -144,12 +152,18 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             ("mode", self._fetch_mode, self._mode_interval),
             ("logs", self._fetch_logs, self._logs_interval),
         ]
-        if self.wireless_enabled:
-            loops.append(("extensive", self._fetch_extensive, self._extensive_interval))
 
         for name, fetch_fn, interval_s in loops:
             self._tasks.append(
                 self._create_task(self._loop(name, fetch_fn, interval_s), f"secvest_{name}_poll")
+            )
+
+        if self.wireless_enabled:
+            self._tasks.append(
+                self._create_task(
+                    self._daily_loop("extensive", self._fetch_extensive, self._extensive_time),
+                    "secvest_extensive_daily",
+                )
             )
 
     def _create_task(self, coro: Awaitable[None], name: str) -> asyncio.Task[None]:
@@ -178,8 +192,30 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         now = time.time()
         if now < self._breaker_until:
             return max(1.0, min(interval_s, self._breaker_until - now))
+        await self._run_once(name, fetch_fn)
+        return interval_s
 
-        # Ist das Lock gerade belegt, wartet dieser Tick hier - keine eigene
+    async def _daily_loop(self, name: str, fetch_fn: Callable[[], Awaitable[None]], time_str: str) -> None:
+        while True:
+            await asyncio.sleep(self._seconds_until_next_daily_time(time_str))
+            await self._run_once(name, fetch_fn)
+
+    async def async_trigger_extensive(self) -> None:
+        """Loest die umfangreiche Wireless-Abfrage sofort aus (Button), unabhaengig
+        vom naechtlichen Zeitplan."""
+        if not self.wireless_enabled:
+            return
+        await self._run_once("extensive", self._fetch_extensive)
+
+    async def _run_once(self, name: str, fetch_fn: Callable[[], Awaitable[None]]) -> None:
+        """Fuehrt einen einzelnen Abruf serialisiert ueber das gemeinsame Lock aus
+        und pflegt Fehlerzaehler/Diagnose-Kennzahlen - gemeinsam genutzt von den
+        Intervall-Loops, dem naechtlichen Zeitplan und dem manuellen Trigger."""
+        now = time.time()
+        if now < self._breaker_until:
+            return
+
+        # Ist das Lock gerade belegt, wartet dieser Aufruf hier - keine eigene
         # Warteschlange noetig, da jede Ebene ohnehin nur eine Schleife ist und
         # sich nie selbst ueberholen kann (max. ein Warter pro Ebene).
         wait_start = time.monotonic()
@@ -191,18 +227,37 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                 await fetch_fn()
             except (asyncio.TimeoutError, SecvestApiError) as err:
                 self._handle_failure(name, err)
-                return self._reconnect_delay
+                return
             except Exception as err:  # unerwarteter Fehler: nicht die Loop sterben lassen
                 _LOGGER.exception("Secvest %s-Abfrage fehlgeschlagen (unerwartet)", name)
                 self._handle_failure(name, err)
-                return self._reconnect_delay
+                return
 
             self._response_times[name].append(time.monotonic() - start)
 
         self._consecutive_failures = 0
         self._breaker_until = 0.0
         self._last_error = None
-        return interval_s
+
+    @staticmethod
+    def _validate_time_str(time_str: str) -> str:
+        if re.match(r"^([01]\d|2[0-3]):[0-5]\d$", str(time_str or "")):
+            return time_str
+        _LOGGER.warning(
+            "Secvest: ungueltige Uhrzeit fuer die umfangreiche Abfrage (%r), verwende Standard %s",
+            time_str,
+            DEFAULT_EXTENSIVE_TIME,
+        )
+        return DEFAULT_EXTENSIVE_TIME
+
+    @staticmethod
+    def _seconds_until_next_daily_time(time_str: str) -> float:
+        hour, minute = (int(part) for part in time_str.split(":", 1))
+        now = dt_util.now()
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        return (target - now).total_seconds()
 
     # -------------------------
     # Diagnose-Kennzahlen (siehe sensor.py)

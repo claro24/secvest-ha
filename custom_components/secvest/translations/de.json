@@ -35,12 +35,12 @@
     "step": {
       "init": {
         "title": "Secvest Optionen",
-        "description": "Zonen, Fehler, Alarmzustand und die umfangreiche Wireless-Abfrage (RSSI/Batterie) laufen unabhängig voneinander, je mit eigenem Intervall. Für RSSI zusätzlich einen separaten, eingeschränkten Web-Benutzer eintragen – ohne Web-Zugangsdaten bleibt die RSSI-Abfrage deaktiviert.",
+        "description": "Zonen, Fehler und Alarmzustand laufen unabhängig voneinander, je mit eigenem Intervall. Die umfangreiche Wireless-Abfrage (RSSI/Batterie) läuft nur einmal täglich zur eingestellten Uhrzeit (oder manuell per Button), um die Anlage zu schonen. Für RSSI zusätzlich einen separaten, eingeschränkten Web-Benutzer eintragen – ohne Web-Zugangsdaten bleibt die RSSI-Abfrage deaktiviert.",
         "data": {
           "zones_interval": "Zonen-Intervall (Sek.)",
           "faults_interval": "Fehler-Intervall (Sek.)",
           "mode_interval": "Alarmzustand-Intervall (Sek.)",
-          "extensive_interval": "Umfangreiche Abfrage / RSSI (Min.)",
+          "extensive_time": "Umfangreiche Abfrage / RSSI, Uhrzeit (HH:MM)",
           "fetch_outputs": "Ausgänge im Zonen-Takt mitfragen",
           "logs_interval": "Ereignisprotokoll / Benutzer-Zuordnung (Min.)",
           "reconnect_delay": "Wartezeit nach Verbindungsabbruch (Sek.)",

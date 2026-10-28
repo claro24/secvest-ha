@@ -21,7 +21,7 @@ from .const import (
     CONF_ZONES_INTERVAL,
     CONF_FAULTS_INTERVAL,
     CONF_MODE_INTERVAL,
-    CONF_EXTENSIVE_INTERVAL,
+    CONF_EXTENSIVE_TIME,
     CONF_FETCH_OUTPUTS,
     CONF_LOGS_INTERVAL,
     CONF_RECONNECT_DELAY,
@@ -32,7 +32,7 @@ from .const import (
     DEFAULT_ZONES_INTERVAL,
     DEFAULT_FAULTS_INTERVAL,
     DEFAULT_MODE_INTERVAL,
-    DEFAULT_EXTENSIVE_INTERVAL,
+    DEFAULT_EXTENSIVE_TIME,
     DEFAULT_FETCH_OUTPUTS,
     DEFAULT_LOGS_INTERVAL,
     DEFAULT_RECONNECT_DELAY,
@@ -150,9 +150,9 @@ class SecvestOptionsFlowHandler(config_entries.OptionsFlow):
                     CONF_MODE_INTERVAL, default=opts.get(CONF_MODE_INTERVAL, DEFAULT_MODE_INTERVAL)
                 ): int,
                 vol.Optional(
-                    CONF_EXTENSIVE_INTERVAL,
-                    default=opts.get(CONF_EXTENSIVE_INTERVAL, DEFAULT_EXTENSIVE_INTERVAL),
-                ): int,
+                    CONF_EXTENSIVE_TIME,
+                    default=opts.get(CONF_EXTENSIVE_TIME, DEFAULT_EXTENSIVE_TIME),
+                ): vol.All(str, vol.Match(r"^([01]\d|2[0-3]):[0-5]\d$")),
                 vol.Optional(
                     CONF_FETCH_OUTPUTS, default=opts.get(CONF_FETCH_OUTPUTS, DEFAULT_FETCH_OUTPUTS)
                 ): bool,

@@ -35,12 +35,12 @@
     "step": {
       "init": {
         "title": "Secvest Options",
-        "description": "Zones, faults, alarm state and the extensive wireless poll (RSSI/battery) each run independently on their own interval. For RSSI, optionally enter a separate restricted web user — RSSI polling stays disabled without web credentials.",
+        "description": "Zones, faults and alarm state each run independently on their own interval. The extensive wireless poll (RSSI/battery) only runs once a day at the configured time (or on demand via the button), to go easy on the panel. For RSSI, optionally enter a separate restricted web user — RSSI polling stays disabled without web credentials.",
         "data": {
           "zones_interval": "Zones interval (seconds)",
           "faults_interval": "Faults interval (seconds)",
           "mode_interval": "Alarm state interval (seconds)",
-          "extensive_interval": "Extensive poll / RSSI (minutes)",
+          "extensive_time": "Extensive poll / RSSI, time of day (HH:MM)",
           "fetch_outputs": "Fetch outputs alongside zones",
           "logs_interval": "Event log / user attribution (minutes)",
           "reconnect_delay": "Reconnect delay after connection loss (seconds)",

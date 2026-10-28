@@ -25,7 +25,7 @@ from .const import (
     CONF_ZONES_INTERVAL,
     CONF_FAULTS_INTERVAL,
     CONF_MODE_INTERVAL,
-    CONF_EXTENSIVE_INTERVAL,
+    CONF_EXTENSIVE_TIME,
     CONF_FETCH_OUTPUTS,
     CONF_LOGS_INTERVAL,
     CONF_RECONNECT_DELAY,
@@ -35,7 +35,7 @@ from .const import (
     DEFAULT_ZONES_INTERVAL,
     DEFAULT_FAULTS_INTERVAL,
     DEFAULT_MODE_INTERVAL,
-    DEFAULT_EXTENSIVE_INTERVAL,
+    DEFAULT_EXTENSIVE_TIME,
     DEFAULT_FETCH_OUTPUTS,
     DEFAULT_LOGS_INTERVAL,
     DEFAULT_RECONNECT_DELAY,
@@ -61,7 +61,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     zones_interval = options.get(CONF_ZONES_INTERVAL, DEFAULT_ZONES_INTERVAL)
     faults_interval = options.get(CONF_FAULTS_INTERVAL, DEFAULT_FAULTS_INTERVAL)
     mode_interval = options.get(CONF_MODE_INTERVAL, DEFAULT_MODE_INTERVAL)
-    extensive_interval = options.get(CONF_EXTENSIVE_INTERVAL, DEFAULT_EXTENSIVE_INTERVAL)
+    extensive_time = options.get(CONF_EXTENSIVE_TIME, DEFAULT_EXTENSIVE_TIME)
     logs_interval = options.get(CONF_LOGS_INTERVAL, DEFAULT_LOGS_INTERVAL)
     fetch_outputs = options.get(CONF_FETCH_OUTPUTS, DEFAULT_FETCH_OUTPUTS)
     reconnect_delay = options.get(CONF_RECONNECT_DELAY, DEFAULT_RECONNECT_DELAY)
@@ -94,7 +94,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         zones_interval_s=zones_interval,
         faults_interval_s=faults_interval,
         mode_interval_s=mode_interval,
-        extensive_interval_min=extensive_interval,
+        extensive_time=extensive_time,
         logs_interval_min=logs_interval,
         fetch_outputs=fetch_outputs,
         wireless_enabled=bool(auth.web_username and auth.web_password),

@@ -35,6 +35,7 @@ async def async_setup_entry(
             SecvestRefreshButton(coordinator, entry),
             SecvestAckAllFaultsButton(coordinator, api, entry),
             SecvestAckBlockingFaultsButton(coordinator, api, entry),
+            SecvestExtensiveRefreshButton(coordinator, entry),
         ]
     )
 
@@ -78,6 +79,25 @@ class SecvestRefreshButton(SecvestBaseButton):
 
     async def async_press(self) -> None:
         await self.coordinator.async_request_refresh()
+
+
+class SecvestExtensiveRefreshButton(SecvestBaseButton):
+    """Loest die umfangreiche Wireless-Abfrage (RSSI/Batterie/Sabotage) sofort
+    aus, unabhaengig vom naechtlichen Zeitplan - z. B. nach dem Einbau eines
+    neuen Funkmelders, ohne bis zur konfigurierten Uhrzeit warten zu muessen."""
+
+    _attr_icon = "mdi:wifi-refresh"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "extensive_refresh_button", "Secvest RSSI/Wireless jetzt abfragen")
+
+    @property
+    def available(self) -> bool:
+        return bool(getattr(self.coordinator, "wireless_enabled", False))
+
+    async def async_press(self) -> None:
+        await self.coordinator.async_trigger_extensive()
 
 
 class SecvestAckFaultsButton(SecvestBaseButton):

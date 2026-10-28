@@ -23,6 +23,12 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.9
+
+Die umfangreiche Wireless-Abfrage (RSSI, Batterie, Sabotage, Supervision je Funkmelder) läuft nicht mehr im festen Minuten-Intervall, sondern nur noch **einmal täglich zu einer frei konfigurierbaren Uhrzeit** (Option "Umfangreiche Abfrage / RSSI, Uhrzeit", Standard 03:00) sowie zusätzlich jederzeit über den neuen Button "Secvest RSSI/Wireless jetzt abfragen". Hintergrund: Anders als Zonen/Fehler/Alarmzustand ist das kein leichtgewichtiger REST-Call, sondern ein kompletter Web-UI-Login-Scrape (CSRF-Token, Session, Formular-Parsen) - und RSSI/Batterie ändern sich ohnehin zu träge, um das öfter als täglich zu rechtfertigen. Das schont die Anlage deutlich, ohne bei Bedarf (z. B. nach Einbau eines neuen Funkmelders) auf den nächsten Tag warten zu müssen.
+
+Einzige bekannte Einschränkung: Ob eine Sabotage-Erkennung zusätzlich auch über die schnelle Fehler-Abfrage (`/faults/`, 3 Sek.) gemeldet wird, ist nicht verifiziert - falls nicht, würde eine Manipulation zwischen den täglichen Abfragen bis zu 24 h unbemerkt bleiben, sofern nicht manuell per Button nachgefragt wird.
+
 ## Neu in Version 0.3.8
 
 Neuer Diagnose-Sensor "Secvest Letzter Benutzer": fragt zusätzlich den Endpoint `/logs/` ab (eigenes Intervall über die neue Option "Ereignisprotokoll / Benutzer-Zuordnung", Standard 5 Minuten; inkrementell per `$filter=timestamp ge <n>`, damit nicht jedes Mal das komplette Log mit bis zu 600 Einträgen geladen wird) und zeigt den Benutzer-Slot bzw. Benutzernamen des letzten protokollierten Vorgangs mit Benutzerbezug. Bestätigt mit echten Log-Beispielen funktioniert das für Scharf-/Unscharfschalten (z. B. `"Ben 001 TB 1 deaktiv"`). Ob auch das Quittieren eines Fehlers oder Alarms einen Benutzer ins Log schreibt, ist bisher **nicht** mit echten Daten belegt — das korrigiert die Aussage aus Version 0.3.7, dass eine Benutzer-Identifikation generell nicht möglich sei; sie war nur für die damals abgefragten Endpoints (`state`/`zones/`/`faults/`/`output/`) richtig.
@@ -285,6 +291,12 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.9
+
+The extensive wireless poll (RSSI, battery, sabotage, supervision per wireless sensor) no longer runs on a fixed-minute interval - it now runs **once a day at a freely configurable time** (option "Extensive poll / RSSI, time of day", default 03:00), plus on demand at any time via the new "Secvest RSSI/Wireless jetzt abfragen" button. Reason: unlike zones/faults/alarm state, this isn't a lightweight REST call but a full web-UI login scrape (CSRF token, session, form parsing) - and RSSI/battery change too slowly to justify running it more often than daily anyway. This goes much easier on the panel without having to wait until the next day when you actually need fresh data (e.g. right after installing a new wireless sensor).
+
+One known caveat: whether a sabotage/tamper event is also reported via the fast faults poll (`/faults/`, 3 sec.) is not verified - if not, tampering between the daily polls could go unnoticed for up to 24h unless manually refreshed via the button.
 
 ## New in Version 0.3.8
 
