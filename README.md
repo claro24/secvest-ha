@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.16
+
+Die eigentliche Ursache für die bisher fehlgeschlagene Benutzer-Zuordnung gefunden und behoben: Die Secvest liefert in `/logs/` die **lokale Wanduhrzeit der Anlage, aber als UTC-Zeitstempel kodiert** (bestätigt durch externe Doku und einen realen Test: exakt ~1 Stunde Versatz bei CET, passend zur Zeitzonen-Differenz). Da unser eigener Erkennungs-Zeitstempel (`time.time()`) immer echtes UTC ist, lag der berechnete Abstand zwischen Mode-Wechsel und passendem Log-Eintrag dadurch systematisch um die lokale UTC-Differenz daneben (1h im Winter, 2h im Sommer) - weit außerhalb des Zuordnungsfensters. Log-Zeitstempel werden jetzt korrekt als lokale Zeit interpretiert und in echtes UTC umgerechnet, bevor sie mit `mode_change_history` abgeglichen werden. Nach der Korrektur liegt die tatsächliche Differenz nur noch bei wenigen Sekunden (normale Erkennungs-/Verarbeitungszeit) - das bisherige 120-Sekunden-Fenster bleibt dafür mehr als ausreichend.
+
 ## Neu in Version 0.3.15
 
 Ein echter Testlauf (Alarm via Türöffnung, Quittierung, Reset) zeigte: Die Scharfschaltung dieses Mal lief gar nicht über Home Assistant (kein `secvest_set_mode`-Aufruf, keine Schaltung über die Alarmzentrale-Karte) - vermutlich direkt am Bedienteil oder in der offiziellen App. Der sofortige `/logs/`-Abgleich wurde bisher aber nur ausgelöst, wenn die Schaltung über unseren eigenen Code (Service oder Alarmzentrale-Entität) kam - bei einer Schaltung am Bedienteil blieb nur der langsame planmäßige 5-Minuten-Poll übrig.
@@ -325,6 +329,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.16
+
+Found and fixed the real cause behind the previously failing user attribution: the Secvest returns `/logs/` timestamps as the panel's **local wall-clock time, but encoded as a UTC timestamp** (confirmed by external docs and a real test: almost exactly 1 hour off under CET, matching the local UTC offset). Since our own detection timestamp (`time.time()`) is always true UTC, the computed gap between a mode change and its matching log entry was systematically off by the local UTC offset (1h in winter, 2h in summer) - far outside the matching window. Log timestamps are now correctly interpreted as local time and converted to true UTC before being matched against `mode_change_history`. After the fix, the real gap is down to a few seconds (normal detection/processing time) - the existing 120-second window is more than enough for that.
 
 ## New in Version 0.3.15
 

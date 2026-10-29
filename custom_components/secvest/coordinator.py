@@ -6,7 +6,7 @@ import re
 import time
 from collections import deque
 from dataclasses import dataclass, field, replace
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Awaitable, Callable
 
 from homeassistant.core import HomeAssistant
@@ -402,6 +402,20 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             target += timedelta(days=1)
         return (target - now).total_seconds()
 
+    def _secvest_log_ts_to_utc_epoch(self, raw_ts: int) -> float:
+        """Rechnet einen /logs/-Zeitstempel der Secvest in echtes UTC um.
+
+        Die Secvest liefert hier bestaetigt (externe Doku + eigene Messung:
+        exakt ~1h Versatz bei CET) die lokale Wanduhrzeit der Anlage, aber als
+        UTC-Unix-Sekunden kodiert, statt sie vorher in echtes UTC umzurechnen.
+        time.time() auf unserer Seite liefert dagegen immer echtes UTC - ohne
+        diese Korrektur wuerde der Abgleich in _try_match_pending_changes()
+        um die lokale UTC-Differenz (Winter 1h, Sommer 2h) danebenliegen.
+        """
+        naive_as_local = datetime.fromtimestamp(raw_ts, tz=timezone.utc).replace(tzinfo=None)
+        tz = dt_util.get_time_zone(self.hass.config.time_zone) or dt_util.DEFAULT_TIME_ZONE
+        return naive_as_local.replace(tzinfo=tz).timestamp()
+
     # -------------------------
     # Diagnose-Kennzahlen (siehe sensor.py)
     # -------------------------
@@ -622,28 +636,33 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         newest_timestamp = previous_last_log_timestamp
         # Jeder neue Eintrag mit Benutzerbezug wird an die Historie angehaengt
         # (nicht nur der letzte ueberschrieben) - bei zwei kurz
-        # aufeinanderfolgenden Vorgaengen geht so keiner verloren.
-        new_user_entries: list[tuple[int, dict[str, Any], dict[str, Any]]] = []
+        # aufeinanderfolgenden Vorgaengen geht so keiner verloren. Fuer den
+        # "since"-Filter behalten wir den rohen Geraete-Zeitstempel (muss zum
+        # Zeitraum der Secvest passen); fuer den Abgleich mit
+        # mode_change_history rechnen wir separat in echtes UTC um (siehe
+        # _secvest_log_ts_to_utc_epoch).
+        new_user_entries: list[tuple[int, float, dict[str, Any], dict[str, Any]]] = []
         for entry in entries:
             for event in entry.get("events", []):
                 try:
-                    ts = int(event.get("timestamp"))
+                    raw_ts = int(event.get("timestamp"))
                 except (TypeError, ValueError):
                     continue
-                if newest_timestamp is None or ts > newest_timestamp:
-                    newest_timestamp = ts
+                if newest_timestamp is None or raw_ts > newest_timestamp:
+                    newest_timestamp = raw_ts
                 if event.get("user") is None:
                     continue
-                new_user_entries.append((ts, entry, event))
+                utc_ts = self._secvest_log_ts_to_utc_epoch(raw_ts)
+                new_user_entries.append((raw_ts, utc_ts, entry, event))
 
         if newest_timestamp is not None:
             self._last_log_timestamp = newest_timestamp
 
         new_user_entries.sort(key=lambda item: item[0])
-        for ts, entry, event in new_user_entries:
+        for raw_ts, utc_ts, entry, event in new_user_entries:
             self._log_history.append(
                 {
-                    "timestamp": ts,
+                    "timestamp": utc_ts,
                     "user": str(event.get("user")),
                     "username": event.get("username"),
                     "action": entry.get("desc"),
