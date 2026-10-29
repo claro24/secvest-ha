@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.17
+
+Neues Feld `log_timestamp` an jedem `mode_change_history`-Eintrag: sobald ein Wechsel einem Log-Eintrag zugeordnet wurde, wird zusätzlich dessen vom Gerät selbst bestätigter (und bereits in UTC korrigierter) Zeitstempel gespeichert - genauer als unser eigener Erkennungs-Zeitstempel, besonders bei einem zwischenzeitlichen Verbindungsausfall mit nachträglicher Zuordnung nach Wiederherstellung.
+
 ## Neu in Version 0.3.16
 
 Die eigentliche Ursache für die bisher fehlgeschlagene Benutzer-Zuordnung gefunden und behoben: Die Secvest liefert in `/logs/` die **lokale Wanduhrzeit der Anlage, aber als UTC-Zeitstempel kodiert** (bestätigt durch externe Doku und einen realen Test: exakt ~1 Stunde Versatz bei CET, passend zur Zeitzonen-Differenz). Da unser eigener Erkennungs-Zeitstempel (`time.time()`) immer echtes UTC ist, lag der berechnete Abstand zwischen Mode-Wechsel und passendem Log-Eintrag dadurch systematisch um die lokale UTC-Differenz daneben (1h im Winter, 2h im Sommer) - weit außerhalb des Zuordnungsfensters. Log-Zeitstempel werden jetzt korrekt als lokale Zeit interpretiert und in echtes UTC umgerechnet, bevor sie mit `mode_change_history` abgeglichen werden. Nach der Korrektur liegt die tatsächliche Differenz nur noch bei wenigen Sekunden (normale Erkennungs-/Verarbeitungszeit) - das Zuordnungsfenster wurde deshalb von 120 auf 15 Sekunden verengt, um eine Verwechslung zwischen zwei kurz aufeinanderfolgenden, unabhängigen Wechseln zuverlässiger auszuschließen.
@@ -329,6 +333,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.17
+
+New `log_timestamp` field on every `mode_change_history` entry: once a change gets matched to a log entry, its device-confirmed (and already UTC-corrected) timestamp is now also stored - more accurate than our own detection timestamp, especially after a temporary connection loss where the match only happens once the connection is restored.
 
 ## New in Version 0.3.16
 

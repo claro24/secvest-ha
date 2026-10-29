@@ -326,6 +326,12 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                 change["user"] = best["user"]
                 change["username"] = best["username"]
                 change["action"] = best["action"]
+                # Der vom Geraet selbst bestaetigte Zeitpunkt ist genauer als
+                # unser eigener Erkennungs-Zeitstempel (change["timestamp"]) -
+                # bei einem Verbindungsausfall mit nachtraeglicher Zuordnung
+                # kann das deutlich auseinanderliegen (wir erkennen den
+                # Wechsel erst bei Wiederherstellung der Verbindung).
+                change["log_timestamp"] = best["timestamp"]
                 best["matched"] = True
                 _LOGGER.debug(
                     "Secvest: Mode-Wechsel %s->%s (t=%s) zugeordnet zu Log-Eintrag '%s' von Benutzer %s (t=%s, Abstand %.1fs)",
@@ -580,6 +586,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                 "user": None,
                 "username": None,
                 "action": None,
+                "log_timestamp": None,
             }
             self._mode_change_history.append(change)
             self._try_match_pending_changes()
