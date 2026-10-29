@@ -15,9 +15,47 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import SecvestApi, SecvestApiError
-from .const import DEFAULT_EXTENSIVE_TIME, STATE_TRANSLATIONS
+from .const import (
+    DEFAULT_EXTENSIVE_TIME,
+    MODE_PARTSET_ALARM,
+    MODE_SET_ALARM,
+    MODE_UNSET_ALARM,
+    STATE_TRANSLATIONS,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+# Fault-Type "5000" = "Zone offen, blockiert Scharfschalten" - bestaetigt durch
+# externe Reverse-Engineering-Doku (thomasdanz/secvest-api, ha-secvest Issue #95:
+# bisher nur "1170" = Repeater-Batterie niedrig und "5000" = Zone offen
+# beobachtet). Nicht alarmspezifisch, aber stabil genug, um andere Fault-Typen
+# (z.B. Batterie) aus der Liste der "offenen Zonen waehrend eines Alarms"
+# auszuschliessen. Ein-/Ausgangszonen erzeugen laut derselben Doku bewusst
+# keinen solchen Fault, auch wenn sie kurz offen waren.
+_FAULT_TYPE_ZONE_OPEN = "5000"
+_ALARM_RAW_MODES = (MODE_UNSET_ALARM, MODE_SET_ALARM, MODE_PARTSET_ALARM)
+
+
+def zone_names_from_faults(faults: list[dict[str, Any]], zones: dict[str, dict[str, Any]]) -> list[str]:
+    """Zonennamen, die laut Fault-Liste zum Alarm gehoeren - gefiltert auf
+    Fault-Type "5000" (siehe oben), damit z.B. eine zeitgleich anliegende
+    Batteriemeldung nicht faelschlich als "hat den Alarm ausgeloest" auftaucht.
+    Gemeinsam genutzt vom Live-Attribut (alarm_control_panel.py) und vom
+    Schnappschuss, der bei Alarm-Erkennung auf mode_change_history landet."""
+    names: list[str] = []
+    for fault in faults:
+        if str(fault.get("type") or "") != _FAULT_TYPE_ZONE_OPEN:
+            continue
+        zone_id = str(fault.get("affects-zone") or "").strip()
+        if not zone_id:
+            continue
+        for zone in zones.values():
+            if str(zone.get("id") or "") == zone_id:
+                name = zone.get("name") or zone_id
+                if name not in names:
+                    names.append(name)
+                break
+    return names
 
 
 def normalize_name(name: str) -> str:
@@ -565,7 +603,29 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
     async def _fetch_faults(self) -> None:
         base = self._base_data()
         faults_payload = await self.api.get_faults()
-        self.async_set_updated_data(replace(base, faults=faults_payload, available=True, last_error=None))
+
+        update_kwargs: dict[str, Any] = {}
+        # Zonen-Zuordnung fuer den juengsten Alarm-Eintrag nachbessern, falls
+        # die Fault-Liste beim urspruenglichen Schnappschuss (im Mode-Poll)
+        # noch nicht aktuell war - Mode- und Fault-Abfrage laufen unabhaengig
+        # und leicht versetzt voneinander. Nur der neueste Alarm-Eintrag wird
+        # geprueft, und nur innerhalb des Zuordnungsfensters.
+        for change in reversed(self._mode_change_history):
+            if change.get("to_mode") not in _ALARM_RAW_MODES:
+                continue
+            if change["zone_names"]:
+                break
+            if time.time() - change["timestamp"] > self._MODE_CHANGE_MATCH_WINDOW_S:
+                break
+            new_names = zone_names_from_faults(faults_payload, base.zones)
+            if new_names:
+                change["zone_names"] = new_names
+                update_kwargs["mode_change_history"] = list(self._mode_change_history)
+            break
+
+        self.async_set_updated_data(
+            replace(base, faults=faults_payload, available=True, last_error=None, **update_kwargs)
+        )
 
     async def _fetch_mode(self) -> None:
         base = self._base_data()
@@ -587,6 +647,18 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                 "username": None,
                 "action": None,
                 "log_timestamp": None,
+                # Schnappschuss der aktuell bekannten Fault-Liste, nur bei
+                # Alarm-Wechseln - friert die ausloesende(n) Zone(n) auf
+                # diesem Eintrag ein, statt sich spaeter auf die live (und
+                # bei zwei schnell aufeinanderfolgenden Alarmen ggf. schon
+                # ueberholte) triggered_zone_names zu verlassen. Falls die
+                # Fault-Abfrage zu diesem Zeitpunkt noch nicht aktuell war,
+                # bessert _fetch_faults() das kurz danach nach.
+                "zone_names": (
+                    zone_names_from_faults(base.faults, base.zones)
+                    if raw_mode in _ALARM_RAW_MODES
+                    else None
+                ),
             }
             self._mode_change_history.append(change)
             self._try_match_pending_changes()

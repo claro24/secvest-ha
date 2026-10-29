@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.18
+
+Neues Feld `zone_names` an jedem `mode_change_history`-Eintrag für Alarm-Wechsel: Bei Erkennung eines Alarms wird sofort ein Schnappschuss der auslösenden Zone(n) (Fault-Type `5000`) auf diesem Eintrag eingefroren, statt sich wie zuvor nur auf die live berechnete `triggered_zone_names` zu verlassen. Das behebt eine Race Condition: Bei zwei schnell aufeinanderfolgenden Alarmen mit unterschiedlichen Zonen zeigte die Live-Variante teils die falsche (neuere) Zone für den älteren Alarm. War die Fault-Abfrage beim ursprünglichen Schnappschuss (im Mode-Poll) noch nicht aktuell, bessert der nächste Fault-Poll den jüngsten Alarm-Eintrag automatisch nach.
+
 ## Neu in Version 0.3.17
 
 Neues Feld `log_timestamp` an jedem `mode_change_history`-Eintrag: sobald ein Wechsel einem Log-Eintrag zugeordnet wurde, wird zusätzlich dessen vom Gerät selbst bestätigter (und bereits in UTC korrigierter) Zeitstempel gespeichert - genauer als unser eigener Erkennungs-Zeitstempel, besonders bei einem zwischenzeitlichen Verbindungsausfall mit nachträglicher Zuordnung nach Wiederherstellung.
@@ -333,6 +337,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.18
+
+New `zone_names` field on every alarm-type `mode_change_history` entry: when an alarm is detected, a snapshot of the triggering zone(s) (fault type `5000`) is frozen onto that entry immediately, instead of relying solely on the live-computed `triggered_zone_names` as before. This fixes a race condition: with two alarms happening in quick succession in different zones, the live attribute could show the wrong (newer) zone for the older alarm. If the fault data wasn't yet current at the time of the original snapshot (taken during the mode poll), the next fault poll backfills the most recent alarm entry automatically.
 
 ## New in Version 0.3.17
 

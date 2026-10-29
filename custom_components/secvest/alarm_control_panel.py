@@ -18,17 +18,9 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .api import SecvestApiError
 from .const import ALARM_MEMORY_MODES, DOMAIN, RAW_TO_HA_STATE
+from .coordinator import zone_names_from_faults
 
 _LOGGER = logging.getLogger(__name__)
-
-# Fault-Type "5000" = "Zone offen, blockiert Scharfschalten" - bestaetigt durch
-# externe Reverse-Engineering-Doku (thomasdanz/secvest-api, ha-secvest Issue #95:
-# bisher nur "1170" = Repeater-Batterie niedrig und "5000" = Zone offen
-# beobachtet). Nicht alarmspezifisch, aber stabil genug, um andere Fault-Typen
-# (z.B. Batterie) aus der Liste der "offenen Zonen waehrend eines Alarms"
-# auszuschliessen. Ein-/Ausgangszonen erzeugen laut derselben Doku bewusst
-# keinen solchen Fault, auch wenn sie kurz offen waren.
-_FAULT_TYPE_ZONE_OPEN = "5000"
 
 
 async def async_setup_entry(
@@ -42,26 +34,10 @@ async def async_setup_entry(
 
 
 def _triggered_zone_names(data: Any) -> list[str]:
-    """Zonennamen, die laut aktueller Fault-Liste zum Alarm gehoeren.
-
-    Nur relevant, waehrend alarm_memory aktiv ist. Gefiltert auf Fault-Type
-    "5000" (siehe oben), damit z.B. eine zeitgleich anliegende Batteriemeldung
-    nicht faelschlich als "hat den Alarm ausgeloest" auftaucht.
-    """
-    names: list[str] = []
-    for fault in data.faults:
-        if str(fault.get("type") or "") != _FAULT_TYPE_ZONE_OPEN:
-            continue
-        zone_id = str(fault.get("affects-zone") or "").strip()
-        if not zone_id:
-            continue
-        for zone in data.zones.values():
-            if str(zone.get("id") or "") == zone_id:
-                name = zone.get("name") or zone_id
-                if name not in names:
-                    names.append(name)
-                break
-    return names
+    """Zonennamen, die laut aktueller Fault-Liste zum Alarm gehoeren - nur
+    relevant, waehrend alarm_memory aktiv ist. Logik liegt zentral in
+    coordinator.zone_names_from_faults(), siehe dort."""
+    return zone_names_from_faults(data.faults, data.zones)
 
 
 class SecvestAlarm(AlarmControlPanelEntity):
