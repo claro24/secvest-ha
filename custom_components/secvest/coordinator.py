@@ -613,7 +613,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         for change in reversed(self._mode_change_history):
             if change.get("to_mode") not in _ALARM_RAW_MODES:
                 continue
-            if change["zone_names"]:
+            if change.get("zone_names"):
                 break
             if time.time() - change["timestamp"] > self._MODE_CHANGE_MATCH_WINDOW_S:
                 break

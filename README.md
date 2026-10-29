@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.19
+
+Regression aus 0.3.18 behoben: Die Fault-Abfrage brach mit `KeyError('zone_names')` ab, sobald in `mode_change_history` ein **älterer, vor dieser Erweiterung gespeicherter** Alarm-Eintrag ohne das neue Feld `zone_names` vorlag - die Nachbesserungs-Logik in `_fetch_faults()` griff darauf mit `[...]` statt `.get()` zu. Jeder einzelne Fault-Poll scheiterte dadurch und wurde fälschlich als "Verbindungsabbruch" protokolliert (bestätigt an einem echten Debug-Log: alle Abbrüche über mehrere Minuten exakt auf diesen einen Fehler zurückführbar, kein echtes Netzwerkproblem, Zonen- und Modus-Abfrage liefen währenddessen normal weiter).
+
 ## Neu in Version 0.3.18
 
 Neues Feld `zone_names` an jedem `mode_change_history`-Eintrag für Alarm-Wechsel: Bei Erkennung eines Alarms wird sofort ein Schnappschuss der auslösenden Zone(n) (Fault-Type `5000`) auf diesem Eintrag eingefroren, statt sich wie zuvor nur auf die live berechnete `triggered_zone_names` zu verlassen. Das behebt eine Race Condition: Bei zwei schnell aufeinanderfolgenden Alarmen mit unterschiedlichen Zonen zeigte die Live-Variante teils die falsche (neuere) Zone für den älteren Alarm. War die Fault-Abfrage beim ursprünglichen Schnappschuss (im Mode-Poll) noch nicht aktuell, bessert der nächste Fault-Poll den jüngsten Alarm-Eintrag automatisch nach.
@@ -337,6 +341,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.19
+
+Fixed a regression from 0.3.18: the faults poll crashed with `KeyError('zone_names')` whenever `mode_change_history` contained an **older alarm entry saved before this field existed**, lacking the new `zone_names` key - the backfill logic in `_fetch_faults()` accessed it with `[...]` instead of `.get()`. Every single faults poll failed as a result and got logged as a "connection drop" - confirmed from a real debug log: every single drop over several minutes traced back to this exact error, no actual network issue, with zones and mode polling continuing normally the whole time.
 
 ## New in Version 0.3.18
 
