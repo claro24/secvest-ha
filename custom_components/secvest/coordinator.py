@@ -337,6 +337,49 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
             (attempts - 1) * 2.0,
         )
 
+    async def async_sync_faults_for_alarm(self) -> None:
+        """Fragt die Fehlerliste nach einem erkannten Alarm zeitnah ab, statt
+        auf den naechsten planmaessigen Fehler-Poll zu warten - analog zu
+        async_sync_logs_for_mode_change(). Noetig, seit der Fehler-Intervall
+        deutlich entspannt werden kann (frueher 1s): ohne diesen Sofort-
+        Abgleich wuerde die Zonenzuordnung fuer die Alarm-Benachrichtigung
+        sonst bis zum naechsten regulaeren Fehler-Poll leer bleiben. Die
+        eigentliche Zuordnung zum richtigen Alarm-Eintrag passiert unabhaengig
+        davon in _fetch_faults() (Nachbesserung auf dem juengsten noch offenen
+        Alarm-Eintrag); diese Methode beschleunigt nur, wann das zuerst
+        versucht wird."""
+        _LOGGER.debug("Secvest: faults-sync nach Alarm gestartet")
+        attempts = 8
+        for attempt in range(attempts):
+            if attempt:
+                await asyncio.sleep(2.0)
+            self._priority_pending += 1
+            try:
+                await self._run_once("faults", self._fetch_faults, priority=True)
+            finally:
+                self._priority_pending -= 1
+            if self._latest_alarm_zone_names_resolved():
+                _LOGGER.debug(
+                    "Secvest: faults-sync fand Zonenzuordnung nach Versuch %s/%s",
+                    attempt + 1,
+                    attempts,
+                )
+                return
+        _LOGGER.debug(
+            "Secvest: faults-sync nach Alarm fand in %ss keine Zonenzuordnung - "
+            "wird vom naechsten planmaessigen Fehler-Poll nachgeholt, falls das "
+            "Zuordnungsfenster noch nicht abgelaufen ist",
+            (attempts - 1) * 2.0,
+        )
+
+    def _latest_alarm_zone_names_resolved(self) -> bool:
+        """True, wenn der juengste Alarm-Eintrag in mode_change_history schon
+        eine Zonenzuordnung hat (oder es noch gar keinen Alarm-Eintrag gibt)."""
+        for change in reversed(self._mode_change_history):
+            if change.get("to_mode") in _ALARM_RAW_MODES:
+                return bool(change.get("zone_names"))
+        return True
+
     def _try_match_pending_changes(self) -> None:
         """Ordnet noch unbestaetigten Mode-Wechseln (_mode_change_history) den
         zeitlich naechsten noch nicht verwendeten Log-Eintrag mit Benutzerbezug
@@ -679,6 +722,20 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                 )
                 self.hass.async_create_task(
                     self.async_sync_logs_for_mode_change(), "secvest_logs_sync"
+                )
+
+            if raw_mode in _ALARM_RAW_MODES and not change["zone_names"]:
+                # Fehler-Abfrage lief beim Schnappschuss oben noch nicht aktuell
+                # (oder laeuft inzwischen zu selten, um es passiv ueber den
+                # naechsten planmaessigen Poll zu erwarten) - jetzt gezielt
+                # nachfragen statt auf den naechsten Fehler-Poll zu warten.
+                _LOGGER.debug(
+                    "Secvest: plane faults-sync fuer Alarm-Wechsel %s -> %s",
+                    base.raw_mode,
+                    raw_mode,
+                )
+                self.hass.async_create_task(
+                    self.async_sync_faults_for_alarm(), "secvest_faults_sync"
                 )
 
         self.async_set_updated_data(

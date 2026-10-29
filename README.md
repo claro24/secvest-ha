@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.20
+
+Sofortiger Fehler-Abgleich nach erkanntem Alarm: Neue Methode `async_sync_faults_for_alarm()` (analog zum bestehenden Logs-Sofortabgleich) fragt die Fehlerliste gezielt mehrfach ab (bis zu 8 Versuche im 2-Sekunden-Abstand), sobald ein Alarm-Wechsel erkannt wird und die Zonenzuordnung aus dem Schnappschuss in `_fetch_mode()` noch leer ist. Notwendig, weil der Fehler-Intervall jetzt deutlich entspannter laufen kann, ohne die Zonen-Echtzeit zu beeinträchtigen (die läuft über den separaten Zonen-Intervall) - ohne diesen Sofort-Abgleich würde die Zonenangabe in der Alarm-Benachrichtigung sonst bis zum nächsten regulären, ggf. erst in mehreren Minuten fälligen Fehler-Poll leer bleiben.
+
 ## Neu in Version 0.3.19
 
 Regression aus 0.3.18 behoben: Die Fault-Abfrage brach mit `KeyError('zone_names')` ab, sobald in `mode_change_history` ein **älterer, vor dieser Erweiterung gespeicherter** Alarm-Eintrag ohne das neue Feld `zone_names` vorlag - die Nachbesserungs-Logik in `_fetch_faults()` griff darauf mit `[...]` statt `.get()` zu. Jeder einzelne Fault-Poll scheiterte dadurch und wurde fälschlich als "Verbindungsabbruch" protokolliert (bestätigt an einem echten Debug-Log: alle Abbrüche über mehrere Minuten exakt auf diesen einen Fehler zurückführbar, kein echtes Netzwerkproblem, Zonen- und Modus-Abfrage liefen währenddessen normal weiter).
@@ -341,6 +345,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.20
+
+Immediate faults re-check after a detected alarm: new `async_sync_faults_for_alarm()` method (mirroring the existing logs re-check) actively re-polls the faults list (up to 8 attempts, 2 seconds apart) whenever an alarm change is detected and the zone-name snapshot taken in `_fetch_mode()` is still empty. Needed now that the faults interval can run much more relaxed without hurting zone real-time behaviour (that's covered by the separate zones interval) - without this re-check, the zone name in the alarm notification would otherwise stay empty until the next regular faults poll, which could be minutes away.
 
 ## New in Version 0.3.19
 
