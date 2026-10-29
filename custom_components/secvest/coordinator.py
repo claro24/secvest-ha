@@ -85,10 +85,12 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
     _LOG_HISTORY_WINDOW = 20
     _MODE_CHANGE_HISTORY_WINDOW = 20
     # Kulanzfenster fuers nachtraegliche Zuordnen eines Log-Eintrags zu einem
-    # erkannten Mode-Wechsel - grosszuegig genug fuer Logging-Verzug/leichte
-    # Uhrzeitabweichung, aber eng genug, um zwei kurz aufeinanderfolgende,
-    # unabhaengige Wechsel i.d.R. nicht zu verwechseln.
-    _MODE_CHANGE_MATCH_WINDOW_S = 120
+    # erkannten Mode-Wechsel. Seit der Zeitzonen-Korrektur in
+    # _secvest_log_ts_to_utc_epoch() liegt die reale Differenz nur noch bei
+    # wenigen Sekunden (normale Erkennungs-/Verarbeitungszeit) - eng gehalten,
+    # um zwei kurz aufeinanderfolgende, unabhaengige Wechsel nicht zu
+    # verwechseln.
+    _MODE_CHANGE_MATCH_WINDOW_S = 15
     _STORAGE_VERSION = 1
 
     def __init__(
