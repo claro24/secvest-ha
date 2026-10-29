@@ -211,16 +211,12 @@ class SecvestAlarm(AlarmControlPanelEntity):
     async def _set_mode(self, mode: str) -> None:
         try:
             await self.coordinator.api.set_mode(mode)
+            # async_request_refresh() ruft _fetch_mode() auf, das jeden
+            # erkannten Wechsel selbst registriert und bei Bedarf sofort den
+            # Logs-Abgleich anstoesst (siehe coordinator._fetch_mode()) -
+            # unabhaengig davon, ob die Schaltung von hier oder am Bedienteil
+            # ausgeloest wurde.
             await self.coordinator.async_request_refresh()
-
-            # Benutzer-Zuordnung ueber /logs/ im Hintergrund nachziehen, statt
-            # darauf zu warten - sonst wuerde jede Schaltung ueber die
-            # Alarmzentrale verzoegert.
-            _LOGGER.debug("Secvest: plane logs-sync nach Moduswechsel (mode=%s, via alarm_control_panel)", mode)
-            self.hass.async_create_task(
-                self.coordinator.async_sync_logs_for_mode_change(),
-                "secvest_logs_sync",
-            )
 
         except asyncio.TimeoutError:
             raise HomeAssistantError("Secvest antwortet nicht (Timeout). Bitte erneut versuchen.")

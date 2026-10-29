@@ -152,17 +152,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except aiohttp.ClientResponseError as err:
             raise HomeAssistantError(f"Secvest HTTP Fehler: {err.status}") from err
 
-        # Refresh after switching
+        # Refresh after switching - loest ueber _fetch_mode() bei Bedarf
+        # selbst den sofortigen Logs-Abgleich aus (siehe dort).
         await coordinator.async_request_refresh()
-
-        # Benutzer-Zuordnung ueber /logs/ im Hintergrund nachziehen, statt den
-        # Service-Call darauf warten zu lassen - sonst wuerde jede Schaltung
-        # verzoegert.
-        _LOGGER.debug("Secvest: plane logs-sync nach Moduswechsel (mode=%s, via service secvest_set_mode)", mode)
-        hass.async_create_task(
-            coordinator.async_sync_logs_for_mode_change(),
-            "secvest_logs_sync",
-        )
 
     hass.services.async_register(
         DOMAIN,

@@ -557,19 +557,34 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         # dazu verfuegbar ist (auch rueckwirkend bei einem spaeteren Poll).
         if base.raw_mode is not None and base.raw_mode != raw_mode:
             _LOGGER.debug("Secvest: Mode-Wechsel erkannt %s -> %s", base.raw_mode, raw_mode)
-            self._mode_change_history.append(
-                {
-                    "timestamp": time.time(),
-                    "from_mode": base.raw_mode,
-                    "to_mode": raw_mode,
-                    "user": None,
-                    "username": None,
-                    "action": None,
-                }
-            )
+            change: dict[str, Any] = {
+                "timestamp": time.time(),
+                "from_mode": base.raw_mode,
+                "to_mode": raw_mode,
+                "user": None,
+                "username": None,
+                "action": None,
+            }
+            self._mode_change_history.append(change)
             self._try_match_pending_changes()
             update_kwargs["mode_change_history"] = list(self._mode_change_history)
             await self._async_save_log_state()
+
+            if change["user"] is None:
+                # Sofortiger Abgleich fuer JEDEN erkannten Wechsel, nicht nur
+                # fuer ueber HA ausgeloeste - eine Schaltung am Bedienteil oder
+                # in der offiziellen App wird genauso hier erkannt (ueber den
+                # naechsten Mode-Poll) und bekommt dieselbe Beschleunigung,
+                # statt auf den naechsten planmaessigen Logs-Poll (Standard
+                # 5 Min.) warten zu muessen.
+                _LOGGER.debug(
+                    "Secvest: plane logs-sync fuer neu erkannten Wechsel %s -> %s",
+                    base.raw_mode,
+                    raw_mode,
+                )
+                self.hass.async_create_task(
+                    self.async_sync_logs_for_mode_change(), "secvest_logs_sync"
+                )
 
         self.async_set_updated_data(
             replace(

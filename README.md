@@ -23,6 +23,12 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.15
+
+Ein echter Testlauf (Alarm via Türöffnung, Quittierung, Reset) zeigte: Die Scharfschaltung dieses Mal lief gar nicht über Home Assistant (kein `secvest_set_mode`-Aufruf, keine Schaltung über die Alarmzentrale-Karte) - vermutlich direkt am Bedienteil oder in der offiziellen App. Der sofortige `/logs/`-Abgleich wurde bisher aber nur ausgelöst, wenn die Schaltung über unseren eigenen Code (Service oder Alarmzentrale-Entität) kam - bei einer Schaltung am Bedienteil blieb nur der langsame planmäßige 5-Minuten-Poll übrig.
+
+Der sofortige Abgleich wird jetzt zentral in `_fetch_mode()` ausgelöst, sobald dort ein noch unzugeordneter Wechsel erkannt wird - unabhängig von der Quelle. Die bisherigen, auf den Service- bzw. Alarmzentrale-Code beschränkten Auslöser wurden entfernt, da dieser eine Weg jetzt alle Fälle abdeckt.
+
 ## Neu in Version 0.3.14
 
 Reale Testdaten (echtes Debug-Log) haben den eigentlichen Grund für verzögerte/fehlende Benutzer-Zuordnung nach einer Schaltung gefunden: Der sofortige `/logs/`-Abgleich lief korrekt, musste aber hinter den laufenden Zonen-/Fehler-/Modus-Polls auf das gemeinsame Lock warten (im Test ca. 9s) - länger, als das vorherige Retry-Fenster abgedeckt hat. Statt einfach länger zu warten, bekommt die dringende Logs-Abfrage jetzt Vorrang: Normale Polls pausieren kurz, solange eine solche Abfrage aktiv ist, statt sich mit in die Warteschlange des Locks einzureihen - dadurch kommt sie in der Regel durch, sobald der gerade laufende Request fertig ist, statt hinter mehreren weiteren Zyklen anzustehen.
@@ -319,6 +325,12 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.15
+
+A real test run (triggering an alarm by opening a door, acknowledging it, resetting) showed: the arming this time didn't go through Home Assistant at all (no `secvest_set_mode` call, no switch via the alarm panel card) - likely done directly at the keypad or the official app. The immediate `/logs/` sync was previously only triggered when the switch came through our own code (the service or the alarm panel entity) - a keypad switch was left with only the slow scheduled 5-minute poll.
+
+The immediate sync is now triggered centrally in `_fetch_mode()` whenever it detects a not-yet-matched change there, regardless of source. The previous triggers limited to the service/alarm-panel code paths were removed, since this one path now covers every case.
 
 ## New in Version 0.3.14
 
