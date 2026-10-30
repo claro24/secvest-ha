@@ -41,7 +41,7 @@ const = _load_const()
         (const.MODE_UNSET_ALARM, "triggered"),
         (const.MODE_SET_ALARM, "triggered"),
         (const.MODE_PARTSET_ALARM, "triggered"),
-        (const.MODE_ACKNOWLEDGED, "disarmed"),
+        (const.MODE_ACKNOWLEDGED, "triggered"),
     ],
 )
 def test_raw_to_ha_state_mapping(raw: str, expected_ha_state: str) -> None:

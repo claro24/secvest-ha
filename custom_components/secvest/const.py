@@ -74,7 +74,16 @@ RAW_TO_HA_STATE = {
     MODE_UNSET_ALARM: _HA_STATE_TRIGGERED,
     MODE_SET_ALARM: _HA_STATE_TRIGGERED,
     MODE_PARTSET_ALARM: _HA_STATE_TRIGGERED,
-    MODE_ACKNOWLEDGED: _HA_STATE_DISARMED,
+    # "acknowledged" = Alarm quittiert, aber noch nicht zurueckgesetzt (noch
+    # kein "unset" gesendet) - als TRIGGERED zeigen, nicht DISARMED, sonst
+    # haelt HA (und die Lovelace-Karte) den Vorgang faelschlich fuer
+    # abgeschlossen und bietet keine Unscharf-Aktion mehr an, obwohl laut
+    # Doku (thomasdanz/secvest-api) "unset" von "acknowledged" aus noch
+    # explizit gesendet werden muss. Bestaetigt durch einen echten
+    # aufgezeichneten Testalarm bei LLAlexX78/Secvest_FUAA50000-ha
+    # (set -> set-alarm -> acknowledged -> unset), der "acknowledged" ebenso
+    # als TRIGGERED behandelt.
+    MODE_ACKNOWLEDGED: _HA_STATE_TRIGGERED,
 }
 
 # Rohzustaende, bei denen ein Alarm ausgeloest und noch nicht quittiert/

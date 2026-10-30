@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.22
+
+Fehlerhaftes Zustands-Mapping für "acknowledged" (Alarm quittiert, aber noch nicht zurückgesetzt) behoben: Die Alarmzentrale zeigte diesen Zustand bisher fälschlich als `disarmed` (unscharf) - dadurch bot die Lovelace-Alarmkarte keine Unscharf-Aktion mehr an, obwohl das abschließende `unset` laut Doku ([thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api): "the app allows unset from acknowledged") noch explizit gesendet werden muss. Der Alarm blieb dadurch effektiv hängen ("Status ist immer noch acknowledge, ich kann nicht auf unset setzen"). `MODE_ACKNOWLEDGED` wird jetzt als `triggered` gemeldet, analog zu [LLAlexX78/Secvest_FUAA50000-ha](https://github.com/LLAlexX78/secvest_fuaa50000-ha), das denselben Zustand anhand eines echten aufgezeichneten Testalarms (`set → set-alarm → acknowledged → unset`) ebenso behandelt - die Unscharf-Aktion bleibt dadurch sichtbar, bis die Anlage wirklich auf `unset` steht.
+
 ## Neu in Version 0.3.21
 
 Fault-Quittierung durch den tatsächlich funktionierenden Mechanismus ersetzt: Die bisherigen Buttons "Secvest Faults quittieren" / "Secvest blockierende Faults quittieren" sendeten `PUT /faults/{id}/` mit `{"ack": true, "acknowledge": true}` - ein Call, der 1:1 aus dem Ursprungsprojekt (dkmouk/secvest-ha) übernommen wurde und laut der unabhängigen Firmware-Reverse-Engineering-Doku [thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api) unbestätigt ist ("the official app has no such call"); Fehlschläge (vermutlich leeres `403`) wurden zudem bisher nur lautlos ins Log geschrieben, nicht dem Nutzer gemeldet. Neuer Button "Secvest blockierende Zonen ausblenden" nutzt stattdessen den dort als getestet dokumentierten, tatsächlich funktionierenden Weg: `PUT /system/partitions-1/zones-{zone}/` mit `{"omitted": "true"}` für jede Zone, die aktuell einen blockierenden "Zone offen"-Fault (Typ `5000`) verursacht - mit echter Erfolgsprüfung anhand der vom Gerät zurückgegebenen Zone (analog zur bestehenden Prüfung in `set_mode()`) und sichtbarem Fehler in der UI statt stillem Log-Eintrag. Für Fault-Typen ohne Zonenbezug (Batterie, Sabotage, Supervision) gibt es laut derselben Doku keinen bekannten Quittierungs-Call; der bisherige "alle Faults quittieren"-Button dafür wurde ersatzlos entfernt, da dafür keine funktionierende Grundlage existiert.
@@ -349,6 +353,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.22
+
+Fixed an incorrect state mapping for "acknowledged" (alarm acknowledged but not yet reset): the alarm panel used to report this as `disarmed`, so the Lovelace alarm card no longer offered a disarm action at all - even though the final `unset` still has to be sent explicitly, per [thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api) ("the app allows unset from acknowledged"). The alarm would effectively get stuck ("status is still acknowledged, I can't set it to unset"). `MODE_ACKNOWLEDGED` now reports as `triggered`, matching [LLAlexX78/Secvest_FUAA50000-ha](https://github.com/LLAlexX78/secvest_fuaa50000-ha), which treats the same state the same way based on an actual recorded test alarm (`set → set-alarm → acknowledged → unset`) - the disarm action now stays visible until the panel is truly `unset`.
 
 ## New in Version 0.3.21
 
