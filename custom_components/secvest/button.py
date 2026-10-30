@@ -10,8 +10,16 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
+from .const import (
+    DOMAIN,
+    MODE_ACKNOWLEDGED,
+    MODE_PARTSET_ALARM,
+    MODE_SET_ALARM,
+    MODE_UNSET_ALARM,
+)
 from .coordinator import _FAULT_TYPE_ZONE_OPEN
+
+_ALARM_RAW_MODES = (MODE_UNSET_ALARM, MODE_SET_ALARM, MODE_PARTSET_ALARM)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -49,6 +57,7 @@ async def async_setup_entry(
     async_add_entities(
         [
             SecvestRefreshButton(coordinator, entry),
+            SecvestAcknowledgeAlarmButton(coordinator, api, entry),
             SecvestOmitBlockingZonesButton(coordinator, api, entry),
             SecvestExtensiveRefreshButton(coordinator, entry),
         ]
@@ -113,6 +122,37 @@ class SecvestExtensiveRefreshButton(SecvestBaseButton):
 
     async def async_press(self) -> None:
         await self.coordinator.async_trigger_extensive()
+
+
+class SecvestAcknowledgeAlarmButton(SecvestBaseButton):
+    """Quittiert einen aktiven Alarm (PUT {"state":"acknowledged"}) - der von
+    der Secvest-API verlangte Zwischenschritt, bevor nach einem Alarm
+    ueberhaupt "unset" gesendet werden kann (siehe thomasdanz/secvest-api:
+    "unset only from set/partset or from acknowledged"; "acknowledged only
+    while in alarm"). Bisher musste dieser Schritt am Bedienteil oder in der
+    offiziellen App erfolgen, da "acknowledged" kein gueltiger Wert fuer den
+    Service secvest_set_mode ist (bewusst nur als eigener Button, da dieser
+    Schritt nur sinnvoll ist, waehrend ein Alarm tatsaechlich aktiv ist)."""
+
+    _attr_icon = "mdi:alarm-light-off-outline"
+
+    def __init__(self, coordinator, api, entry: ConfigEntry) -> None:
+        super().__init__(coordinator, entry, "acknowledge_alarm", "Secvest Alarm quittieren")
+        self._api = api
+
+    @property
+    def available(self) -> bool:
+        d = self.coordinator.data
+        return bool(d and d.raw_mode in _ALARM_RAW_MODES)
+
+    async def async_press(self) -> None:
+        try:
+            await self._api.set_mode(MODE_ACKNOWLEDGED)
+        except Exception as err:
+            await self.coordinator.async_request_refresh()
+            raise HomeAssistantError(f"Secvest: Alarm konnte nicht quittiert werden: {err}") from err
+
+        await self.coordinator.async_request_refresh()
 
 
 class SecvestOmitBlockingZonesButton(SecvestBaseButton):

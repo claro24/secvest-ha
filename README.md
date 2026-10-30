@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.23
+
+Neuer Button "Secvest Alarm quittieren": sendet `PUT {"state":"acknowledged"}` - den von der Secvest-API verlangten Zwischenschritt, bevor nach einem Alarm überhaupt `unset` gesendet werden kann (siehe [thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api): "unset only from set/partset or from acknowledged"; "acknowledged only while in alarm"). Bisher musste dieser Schritt am Bedienteil oder in der offiziellen App erfolgen; "acknowledged" ist bewusst kein Wert für den Service `secvest_set_mode`, sondern nur als eigener Button verfügbar, nur aktiv, während tatsächlich ein Alarm ausgelöst ist. Die Fehlermeldung in `set_mode()` bei einem abgelehnten Wechsel ist jetzt allgemeiner formuliert (nicht mehr speziell auf Scharf/Teilscharf bezogen), damit sie auch für diesen Fall sinnvoll bleibt.
+
 ## Neu in Version 0.3.22
 
 Fehlerhaftes Zustands-Mapping für "acknowledged" (Alarm quittiert, aber noch nicht zurückgesetzt) behoben: Die Alarmzentrale zeigte diesen Zustand bisher fälschlich als `disarmed` (unscharf) - dadurch bot die Lovelace-Alarmkarte keine Unscharf-Aktion mehr an, obwohl das abschließende `unset` laut Doku ([thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api): "the app allows unset from acknowledged") noch explizit gesendet werden muss. Der Alarm blieb dadurch effektiv hängen ("Status ist immer noch acknowledge, ich kann nicht auf unset setzen"). `MODE_ACKNOWLEDGED` wird jetzt als `triggered` gemeldet, analog zu [LLAlexX78/Secvest_FUAA50000-ha](https://github.com/LLAlexX78/secvest_fuaa50000-ha), das denselben Zustand anhand eines echten aufgezeichneten Testalarms (`set → set-alarm → acknowledged → unset`) ebenso behandelt - die Unscharf-Aktion bleibt dadurch sichtbar, bis die Anlage wirklich auf `unset` steht.
@@ -353,6 +357,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.23
+
+New button "Secvest Alarm quittieren" (acknowledge alarm): sends `PUT {"state":"acknowledged"}` - the intermediate step the Secvest API requires before `unset` can be sent at all after an alarm (see [thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api): "unset only from set/partset or from acknowledged"; "acknowledged only while in alarm"). Previously this step had to happen at the keypad or in the official app; "acknowledged" is deliberately not a value for the `secvest_set_mode` service, only available as its own button, active only while an alarm is actually triggered. The error message in `set_mode()` for a rejected state change is now phrased more generally (no longer specific to arm/arm-home), so it still makes sense for this case too.
 
 ## New in Version 0.3.22
 

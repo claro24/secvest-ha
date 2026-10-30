@@ -802,8 +802,17 @@ class SecvestApi:
         )
         actual_state = data.get("state") if isinstance(data, dict) else None
         if actual_state != new_state:
+            # "acknowledged" ist laut Doku nur waehrend eines aktiven Alarms
+            # gueltig ("acknowledged only while in alarm") - der Scharf/
+            # Teilscharf-Hinweis waere dafuer irrefuehrend.
+            hint = (
+                "vermutlich ist ein direkter Wechsel zwischen Scharf und "
+                "Teilscharf nicht erlaubt, bitte erst unscharf schalten."
+                if new_state in ("set", "partset")
+                else "vermutlich ist dieser Wechsel aus dem aktuellen Zustand nicht erlaubt "
+                "(z.B. 'acknowledged' nur waehrend eines aktiven Alarms)."
+            )
             raise SecvestApiError(
                 f"Secvest hat den Zustand nicht geaendert (angefordert: {new_state!r}, "
-                f"weiterhin: {actual_state!r}) - vermutlich ist ein direkter Wechsel "
-                "zwischen Scharf und Teilscharf nicht erlaubt, bitte erst unscharf schalten."
+                f"weiterhin: {actual_state!r}) - {hint}"
             )
