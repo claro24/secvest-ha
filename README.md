@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.21
+
+Fault-Quittierung durch den tatsächlich funktionierenden Mechanismus ersetzt: Die bisherigen Buttons "Secvest Faults quittieren" / "Secvest blockierende Faults quittieren" sendeten `PUT /faults/{id}/` mit `{"ack": true, "acknowledge": true}` - ein Call, der 1:1 aus dem Ursprungsprojekt (dkmouk/secvest-ha) übernommen wurde und laut der unabhängigen Firmware-Reverse-Engineering-Doku [thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api) unbestätigt ist ("the official app has no such call"); Fehlschläge (vermutlich leeres `403`) wurden zudem bisher nur lautlos ins Log geschrieben, nicht dem Nutzer gemeldet. Neuer Button "Secvest blockierende Zonen ausblenden" nutzt stattdessen den dort als getestet dokumentierten, tatsächlich funktionierenden Weg: `PUT /system/partitions-1/zones-{zone}/` mit `{"omitted": "true"}` für jede Zone, die aktuell einen blockierenden "Zone offen"-Fault (Typ `5000`) verursacht - mit echter Erfolgsprüfung anhand der vom Gerät zurückgegebenen Zone (analog zur bestehenden Prüfung in `set_mode()`) und sichtbarem Fehler in der UI statt stillem Log-Eintrag. Für Fault-Typen ohne Zonenbezug (Batterie, Sabotage, Supervision) gibt es laut derselben Doku keinen bekannten Quittierungs-Call; der bisherige "alle Faults quittieren"-Button dafür wurde ersatzlos entfernt, da dafür keine funktionierende Grundlage existiert.
+
 ## Neu in Version 0.3.20
 
 Sofortiger Fehler-Abgleich nach erkanntem Alarm: Neue Methode `async_sync_faults_for_alarm()` (analog zum bestehenden Logs-Sofortabgleich) fragt die Fehlerliste gezielt mehrfach ab (bis zu 8 Versuche im 2-Sekunden-Abstand), sobald ein Alarm-Wechsel erkannt wird und die Zonenzuordnung aus dem Schnappschuss in `_fetch_mode()` noch leer ist. Notwendig, weil der Fehler-Intervall jetzt deutlich entspannter laufen kann, ohne die Zonen-Echtzeit zu beeinträchtigen (die läuft über den separaten Zonen-Intervall) - ohne diesen Sofort-Abgleich würde die Zonenangabe in der Alarm-Benachrichtigung sonst bis zum nächsten regulären, ggf. erst in mehreren Minuten fälligen Fehler-Poll leer bleiben.
@@ -345,6 +349,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.21
+
+Replaced fault acknowledgment with the mechanism that actually works: the previous "Secvest Faults quittieren" / "Secvest blockierende Faults quittieren" buttons sent `PUT /faults/{id}/` with `{"ack": true, "acknowledge": true}` - a call carried over 1:1 from the upstream project (dkmouk/secvest-ha) that the independent firmware reverse-engineering docs at [thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api) mark as unconfirmed ("the official app has no such call"); failures (likely an empty `403`) were also only logged silently, never surfaced to the user. New button "Secvest blockierende Zonen ausblenden" instead uses the mechanism documented there as tested and working: `PUT /system/partitions-1/zones-{zone}/` with `{"omitted": "true"}` for every zone currently causing a blocking "zone open" fault (type `5000`) - with a real success check against the zone object the device returns (mirroring the existing check in `set_mode()`) and a visible error in the UI instead of a silent log entry. For fault types with no zone (battery, tamper, supervision), the same docs show no known acknowledgment call; the previous "acknowledge all faults" button was removed outright since there is no working basis for it.
 
 ## New in Version 0.3.20
 

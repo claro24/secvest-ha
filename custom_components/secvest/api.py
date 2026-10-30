@@ -742,17 +742,48 @@ class SecvestApi:
         )
         return text, debug
 
-    async def ack_fault(self, fault_id: str) -> None:
-        await self._request_json(
+    async def set_zone_omitted(self, zone_id: str, omitted: bool) -> dict[str, Any]:
+        """Blendet eine Zone fuer den naechsten Scharfschaltungszyklus aus
+        (oder wieder ein) - der einzige nachweislich funktionierende Weg,
+        einen blockierenden "Zone offen"-Fault (prevents-set) loszuwerden.
+
+        Ersetzt den fruehren Versuch, Faults direkt per PUT /faults/{id}/ mit
+        {"ack": true, "acknowledge": true} zu quittieren (so auch im
+        Ursprungsprojekt dkmouk/secvest-ha) - laut der unabhaengigen
+        Firmware-Reverse-Engineering-Doku thomasdanz/secvest-api ist das ein
+        unbestaetigter Drittanbieter-Call ("the official app has no such
+        call"), waehrend PUT .../zones-{zone}/ mit {"omitted": "true"} dort
+        als getestet und funktionierend dokumentiert ist. "omitted" muss
+        dabei als String gesendet werden, nicht als JSON-Bool - die Firmware
+        erwartet es so.
+        """
+        data = await self._request_json(
             "PUT",
             paths=(
-                f"/faults/{fault_id}/",
-                f"/faults/{fault_id}",
+                f"/system/partitions-1/zones-{zone_id}/",
+                f"/system/partitions-1/zones-{zone_id}",
+                f"/system/partitions/zones-{zone_id}/",
+                f"/system/partitions/zones-{zone_id}",
             ),
-            json_payload={"ack": True, "acknowledge": True},
+            json_payload={"omitted": "true" if omitted else "false"},
             headers={"Content-Type": "application/json"},
-            expect_json=False,
         )
+        if not isinstance(data, dict):
+            raise SecvestApiError(f"Invalid zone payload after omit: {data!r}")
+
+        # Wie bei set_mode(): die Firmware kann einen Request mit 200
+        # beantworten, ohne den Zustand tatsaechlich zu aendern (z.B. eine
+        # nicht ausblendbare Zone) - ohne diesen Vergleich wuerde HA einen
+        # stillen Fehlschlag faelschlich als Erfolg melden.
+        actual = str(data.get("omitted")).strip().lower()
+        expected = "true" if omitted else "false"
+        if actual != expected:
+            raise SecvestApiError(
+                f"Secvest hat Zone {zone_id} nicht wie angefordert "
+                f"aus-/eingeblendet (angefordert: omitted={expected!r}, "
+                f"Antwort: omitted={data.get('omitted')!r})"
+            )
+        return data
 
     async def set_mode(self, new_state: str) -> None:
         # PUT endpoint hat bei dir Slash am Ende

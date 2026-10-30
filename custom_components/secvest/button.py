@@ -6,10 +6,12 @@ from typing import Any
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
+from .coordinator import _FAULT_TYPE_ZONE_OPEN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,6 +21,20 @@ def _faults(data: Any) -> list[dict[str, Any]]:
     if isinstance(faults, list):
         return [item for item in faults if isinstance(item, dict)]
     return []
+
+
+def _blocking_zone_ids(data: Any) -> list[str]:
+    """Zonen-IDs, die laut aktueller Fault-Liste das Scharfschalten
+    blockieren (Fault-Type "5000" = Zone offen, siehe coordinator.py) - genau
+    die, die sich per api.set_zone_omitted() nachweislich loeschen lassen."""
+    ids: list[str] = []
+    for fault in _faults(data):
+        if str(fault.get("type") or "") != _FAULT_TYPE_ZONE_OPEN:
+            continue
+        zone_id = str(fault.get("affects-zone") or "").strip()
+        if zone_id and zone_id not in ids:
+            ids.append(zone_id)
+    return ids
 
 
 async def async_setup_entry(
@@ -33,8 +49,7 @@ async def async_setup_entry(
     async_add_entities(
         [
             SecvestRefreshButton(coordinator, entry),
-            SecvestAckAllFaultsButton(coordinator, api, entry),
-            SecvestAckBlockingFaultsButton(coordinator, api, entry),
+            SecvestOmitBlockingZonesButton(coordinator, api, entry),
             SecvestExtensiveRefreshButton(coordinator, entry),
         ]
     )
@@ -100,63 +115,49 @@ class SecvestExtensiveRefreshButton(SecvestBaseButton):
         await self.coordinator.async_trigger_extensive()
 
 
-class SecvestAckFaultsButton(SecvestBaseButton):
-    _attr_icon = "mdi:check-circle-outline"
+class SecvestOmitBlockingZonesButton(SecvestBaseButton):
+    """Blendet alle Zonen aus, die laut Fault-Liste aktuell das Scharfschalten
+    blockieren (Fault-Type "5000", 'Zone offen') - der einzige nachweislich
+    funktionierende Weg, einen solchen Fault loszuwerden (siehe
+    api.set_zone_omitted()). Ersetzt die fruehere(n) "Faults quittieren"-
+    Button(s), die auf einem bei thomasdanz/secvest-api als unbestaetigt
+    dokumentierten PUT /faults/{id}/ beruhten und vermutlich nie
+    funktioniert haben (Geraet antwortet darauf wohl mit leerem 403, das
+    bisher lautlos als Auth-Fehler verschluckt wurde). Fuer Fault-Typen ohne
+    Zonenbezug (Batterie, Sabotage, Supervision) gibt es laut derselben Doku
+    keinen bekannten Quittierungs-Call - die loesen sich nur durch Beheben
+    der Ursache selbst auf. Die Ausblendung gilt nur fuer den naechsten
+    Scharfschaltungszyklus (Firmware-Verhalten, nicht dauerhaft)."""
 
-    def __init__(
-        self,
-        coordinator,
-        api,
-        entry: ConfigEntry,
-        unique_suffix: str,
-        name: str,
-        blocking_only: bool,
-    ) -> None:
-        super().__init__(coordinator, entry, unique_suffix, name)
+    _attr_icon = "mdi:eye-off-outline"
+
+    def __init__(self, coordinator, api, entry: ConfigEntry) -> None:
+        super().__init__(
+            coordinator,
+            entry,
+            "omit_blocking_zones",
+            "Secvest blockierende Zonen ausblenden",
+        )
         self._api = api
-        self._blocking_only = blocking_only
 
     async def async_press(self) -> None:
-        ids: list[str] = []
-        for fault in _faults(self.coordinator.data):
-            if self._blocking_only and not bool(fault.get("prevents-set")):
-                continue
-            fault_id = fault.get("id")
-            if fault_id is not None:
-                ids.append(str(fault_id))
-
-        if not ids:
-            _LOGGER.info("No Secvest faults to acknowledge.")
+        zone_ids = _blocking_zone_ids(self.coordinator.data)
+        if not zone_ids:
+            _LOGGER.info("Secvest: keine blockierenden Zonen zum Ausblenden gefunden.")
             return
 
-        for fault_id in ids:
+        errors: list[str] = []
+        for zone_id in zone_ids:
             try:
-                await self._api.ack_fault(fault_id)
+                await self._api.set_zone_omitted(zone_id, True)
             except Exception as err:
-                _LOGGER.warning("Failed to acknowledge Secvest fault %s: %r", fault_id, err)
+                _LOGGER.warning("Secvest: Zone %s konnte nicht ausgeblendet werden: %r", zone_id, err)
+                errors.append(f"Zone {zone_id}: {err}")
 
         await self.coordinator.async_request_refresh()
 
-
-class SecvestAckAllFaultsButton(SecvestAckFaultsButton):
-    def __init__(self, coordinator, api, entry: ConfigEntry) -> None:
-        super().__init__(
-            coordinator,
-            api,
-            entry,
-            "ack_all_faults",
-            "Secvest Faults quittieren",
-            blocking_only=False,
-        )
-
-
-class SecvestAckBlockingFaultsButton(SecvestAckFaultsButton):
-    def __init__(self, coordinator, api, entry: ConfigEntry) -> None:
-        super().__init__(
-            coordinator,
-            api,
-            entry,
-            "ack_blocking_faults",
-            "Secvest blockierende Faults quittieren",
-            blocking_only=True,
-        )
+        if errors:
+            raise HomeAssistantError(
+                "Secvest: nicht alle blockierenden Zonen konnten ausgeblendet werden - "
+                + "; ".join(errors)
+            )
