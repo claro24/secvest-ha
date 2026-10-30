@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.24
+
+Unnötige Fault-Sync-Versuche für `unset-alarm` entfernt: Dieser Alarmtyp (Sensor-Störung während der Aktivierungsphase, oder definierter Eingangsweg beim Entschärfen verlassen) erzeugt laut Doku nie einen Fault-Type-"5000"-Eintrag - Ein-/Ausgangszonen sind davon bewusst ausgenommen, selbst wenn sie kurz offen waren. Der seit 0.3.20 bestehende Zonen-Sofortabgleich (`async_sync_faults_for_alarm()`) lief bei `unset-alarm` deshalb immer die volle Wartezeit ohne Erfolgschance durch. Betroffen sind nur noch `set-alarm`/`partset-alarm` (neue Konstante `_ZONE_ATTRIBUTABLE_ALARM_MODES`, ersetzt die bisherige `_ALARM_RAW_MODES`). Die eigentliche Erklärung für `unset-alarm` steht im Log-Eintrag selbst (Feld `action`) und wird weiterhin über den bestehenden Logs-Abgleich geliefert.
+
 ## Neu in Version 0.3.23
 
 Neuer Button "Secvest Alarm quittieren": sendet `PUT {"state":"acknowledged"}` - den von der Secvest-API verlangten Zwischenschritt, bevor nach einem Alarm überhaupt `unset` gesendet werden kann (siehe [thomasdanz/secvest-api](https://github.com/thomasdanz/secvest-api): "unset only from set/partset or from acknowledged"; "acknowledged only while in alarm"). Bisher musste dieser Schritt am Bedienteil oder in der offiziellen App erfolgen; "acknowledged" ist bewusst kein Wert für den Service `secvest_set_mode`, sondern nur als eigener Button verfügbar, nur aktiv, während tatsächlich ein Alarm ausgelöst ist. Die Fehlermeldung in `set_mode()` bei einem abgelehnten Wechsel ist jetzt allgemeiner formuliert (nicht mehr speziell auf Scharf/Teilscharf bezogen), damit sie auch für diesen Fall sinnvoll bleibt.
@@ -357,6 +361,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.24
+
+Removed pointless faults re-sync attempts for `unset-alarm`: this alarm type (a sensor fault during the arming phase, or leaving the defined entry path while disarming) never produces a fault type "5000" entry per the docs - entry/exit zones are deliberately excluded from that, even if briefly open. The zone re-sync added in 0.3.20 (`async_sync_faults_for_alarm()`) used to run its full wait with zero chance of success for `unset-alarm`. Now only `set-alarm`/`partset-alarm` trigger it (new constant `_ZONE_ATTRIBUTABLE_ALARM_MODES`, replacing the previous `_ALARM_RAW_MODES`). The actual explanation for `unset-alarm` lives in the log entry itself (the `action` field), which the existing logs re-check already delivers.
 
 ## New in Version 0.3.23
 

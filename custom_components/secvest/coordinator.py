@@ -33,7 +33,15 @@ _LOGGER = logging.getLogger(__name__)
 # auszuschliessen. Ein-/Ausgangszonen erzeugen laut derselben Doku bewusst
 # keinen solchen Fault, auch wenn sie kurz offen waren.
 _FAULT_TYPE_ZONE_OPEN = "5000"
-_ALARM_RAW_MODES = (MODE_UNSET_ALARM, MODE_SET_ALARM, MODE_PARTSET_ALARM)
+# Nur set-alarm/partset-alarm (Alarm waehrend scharf/teilscharf) koennen ueber
+# die Fault-Liste einer Zone zugeordnet werden. unset-alarm ("Eingangsweg
+# verlassen" bzw. ein Sensorfehler waehrend der Aktivierungsphase) erzeugt
+# nie einen Fault-Type-5000-Eintrag (Ein-/Ausgangszonen sind davon laut Doku
+# bewusst ausgenommen) - ein Versuch waere reine Zeitverschwendung (volle
+# Sync-Retry-Schleife ohne Erfolgschance). Die Erklaerung dafuer steht
+# stattdessen im Log-Eintrag selbst (siehe "action"-Feld, bereits ueber den
+# bestehenden Logs-Abgleich verfuegbar).
+_ZONE_ATTRIBUTABLE_ALARM_MODES = (MODE_SET_ALARM, MODE_PARTSET_ALARM)
 
 
 def zone_names_from_faults(faults: list[dict[str, Any]], zones: dict[str, dict[str, Any]]) -> list[str]:
@@ -376,7 +384,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         """True, wenn der juengste Alarm-Eintrag in mode_change_history schon
         eine Zonenzuordnung hat (oder es noch gar keinen Alarm-Eintrag gibt)."""
         for change in reversed(self._mode_change_history):
-            if change.get("to_mode") in _ALARM_RAW_MODES:
+            if change.get("to_mode") in _ZONE_ATTRIBUTABLE_ALARM_MODES:
                 return bool(change.get("zone_names"))
         return True
 
@@ -654,7 +662,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         # und leicht versetzt voneinander. Nur der neueste Alarm-Eintrag wird
         # geprueft, und nur innerhalb des Zuordnungsfensters.
         for change in reversed(self._mode_change_history):
-            if change.get("to_mode") not in _ALARM_RAW_MODES:
+            if change.get("to_mode") not in _ZONE_ATTRIBUTABLE_ALARM_MODES:
                 continue
             if change.get("zone_names"):
                 break
@@ -699,7 +707,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                 # bessert _fetch_faults() das kurz danach nach.
                 "zone_names": (
                     zone_names_from_faults(base.faults, base.zones)
-                    if raw_mode in _ALARM_RAW_MODES
+                    if raw_mode in _ZONE_ATTRIBUTABLE_ALARM_MODES
                     else None
                 ),
             }
@@ -724,7 +732,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                     self.async_sync_logs_for_mode_change(), "secvest_logs_sync"
                 )
 
-            if raw_mode in _ALARM_RAW_MODES and not change["zone_names"]:
+            if raw_mode in _ZONE_ATTRIBUTABLE_ALARM_MODES and not change["zone_names"]:
                 # Fehler-Abfrage lief beim Schnappschuss oben noch nicht aktuell
                 # (oder laeuft inzwischen zu selten, um es passiv ueber den
                 # naechsten planmaessigen Poll zu erwarten) - jetzt gezielt
