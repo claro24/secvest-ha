@@ -82,6 +82,38 @@ def normalize_name(name: str) -> str:
     )
 
 
+_ZONE_CODE_RE = re.compile(r"\bZ(\d{3})\b")
+
+
+def translate_zone_codes_in_text(
+    text: str | None,
+    zones: dict[str, dict[str, Any]],
+    zone_name_map: dict[str, str],
+) -> str | None:
+    """Ersetzt Zonen-Codes wie "Z219" in frei formuliertem Log-Text (z.B.
+    "Eing gest. Z219") durch den auf der Zentrale hinterlegten (oder per
+    Optionen konfigurierten) Zonennamen, z.B. "Eing gest. Eingangstuer" -
+    wird vor allem fuer unset-alarm gebraucht, dessen Erklaerung nur als
+    Freitext im Log steht (siehe _ZONE_ATTRIBUTABLE_ALARM_MODES oben), nicht
+    als strukturierte Zonenliste wie bei set-alarm/partset-alarm."""
+    if not text or "Z" not in text:
+        return text
+
+    by_id: dict[str, str] = {}
+    for zone in zones.values():
+        zone_id = str(zone.get("id") or "").strip()
+        if not zone_id:
+            continue
+        raw_name = zone.get("name") or ""
+        key = normalize_name(raw_name) if raw_name else ""
+        by_id[zone_id] = zone_name_map.get(key) or raw_name or key.replace("_", " ")
+
+    def _replace(match: re.Match[str]) -> str:
+        return by_id.get(match.group(1), match.group(0))
+
+    return _ZONE_CODE_RE.sub(_replace, text)
+
+
 @dataclass
 class SecvestData:
     raw_mode: str | None
@@ -770,6 +802,7 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         # zu bekommen). Beim allerersten Aufruf (since=None) liefert die
         # Firmware bis zu 600 Eintraege (komplette Logkapazitaet) - entsprechend
         # langsamer, aber nur einmalig.
+        base = self._base_data()
         previous_last_log_timestamp = self._last_log_timestamp
         since = previous_last_log_timestamp + 1 if previous_last_log_timestamp is not None else None
         entries = await self.api.get_logs(since=since)
@@ -811,7 +844,9 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
                     "timestamp": utc_ts,
                     "user": str(event.get("user")),
                     "username": event.get("username"),
-                    "action": entry.get("desc"),
+                    "action": translate_zone_codes_in_text(
+                        entry.get("desc"), base.zones, self._zone_name_map
+                    ),
                     "matched": False,
                 }
             )
@@ -837,6 +872,5 @@ class SecvestCoordinator(DataUpdateCoordinator[SecvestData]):
         if self._last_log_timestamp != previous_last_log_timestamp:
             await self._async_save_log_state()
 
-        base = self._base_data()
         self.async_set_updated_data(replace(base, available=True, last_error=None, **update_kwargs))
         return bool(new_user_entries)

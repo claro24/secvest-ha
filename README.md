@@ -23,6 +23,10 @@ Dies ist ein Fork von [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha).
 - Deutsch- und englischsprachige Oberfläche
 - Diagnoseexport zur Fehlersuche
 
+## Neu in Version 0.3.25
+
+Zonen-Codes in Log-Texten werden jetzt übersetzt: Freitext-Einträge wie "Eing gest. Z219" enthalten rohe Zonen-Codes (`Z` + 3-stellige Nummer) statt des eigentlichen Zonennamens - betrifft vor allem `unset-alarm` (siehe 0.3.24), dessen Erklärung nur als solcher Freitext im Log steht, nicht als strukturierte Zonenliste. Neue Funktion `translate_zone_codes_in_text()` ersetzt jeden gefundenen Code durch den auf der Zentrale hinterlegten (oder per Zonen-Namensliste in den Optionen konfigurierten) Namen, z. B. "Eing gest. Z219" → "Eing gest. Haustür". Wirkt auf das `action`-Feld in `log_history` und damit sowohl auf die Signal-Automatisierung als auch auf den Sensor "Secvest Letzter Benutzer".
+
 ## Neu in Version 0.3.24
 
 Unnötige Fault-Sync-Versuche für `unset-alarm` entfernt: Dieser Alarmtyp (Sensor-Störung während der Aktivierungsphase, oder definierter Eingangsweg beim Entschärfen verlassen) erzeugt laut Doku nie einen Fault-Type-"5000"-Eintrag - Ein-/Ausgangszonen sind davon bewusst ausgenommen, selbst wenn sie kurz offen waren. Der seit 0.3.20 bestehende Zonen-Sofortabgleich (`async_sync_faults_for_alarm()`) lief bei `unset-alarm` deshalb immer die volle Wartezeit ohne Erfolgschance durch. Betroffen sind nur noch `set-alarm`/`partset-alarm` (neue Konstante `_ZONE_ATTRIBUTABLE_ALARM_MODES`, ersetzt die bisherige `_ALARM_RAW_MODES`). Die eigentliche Erklärung für `unset-alarm` steht im Log-Eintrag selbst (Feld `action`) und wird weiterhin über den bestehenden Logs-Abgleich geliefert.
@@ -361,6 +365,10 @@ This is a fork of [dkmouk/secvest-ha](https://github.com/dkmouk/secvest-ha). Man
 - Local polling without a cloud service
 - German and English interface
 - Diagnostic export for troubleshooting
+
+## New in Version 0.3.25
+
+Zone codes in log text are now translated: free-text entries like "Eing gest. Z219" contain raw zone codes (`Z` + 3-digit number) instead of the actual zone name - mainly affects `unset-alarm` (see 0.3.24), whose explanation lives only as such free text in the log, not as a structured zone list. New `translate_zone_codes_in_text()` function replaces every code found with the name set on the panel (or configured via the zone name map in the options), e.g. "Eing gest. Z219" → "Eing gest. Haustür". Applies to the `action` field in `log_history`, so it reaches both the Signal automation and the "Secvest Letzter Benutzer" sensor.
 
 ## New in Version 0.3.24
 
